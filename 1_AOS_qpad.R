@@ -395,7 +395,7 @@ for (sp_code in species_to_fit){
                             bru_max_iter = 10,
                             bru_initial = inits))
   
-  as.numeric(sum(fit$bru_timings$Time))/60
+  as.numeric(sum(fit_QPAD$bru_timings$Time))/60
 
   # --------------------------------
   # Fit model without QPAD offsets
@@ -407,12 +407,15 @@ for (sp_code in species_to_fit){
                                  bru_max_iter = 10,
                                  bru_initial = inits))
   
-  as.numeric(sum(fit$bru_timings$Time))/60
-  
+  as.numeric(sum(fit_NULL$bru_timings$Time))/60
   
   # -------------------------------------------------------
-  # Save model summary
+  # Compare two models
   # -------------------------------------------------------
+  
+  fit_QPAD$waic$waic
+  fit_NULL$waic$waic
+  
   # 
   # model_fit <- list(
   #   sp_code = sp_code,
