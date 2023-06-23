@@ -1,6 +1,8 @@
 # *******************************************
-# Do QPAD offsets improve cross-validation accuracy,
-#  compared to models that omit them?
+
+# Do QPAD offsets improve cross-validation accuracy compared to models that omit them?
+#  - Models are fit to point counts only, not checklists
+
 # *******************************************
 
 # ------------------------------------------------
@@ -310,11 +312,8 @@ for (sp_code in species_to_fit){
   
   model_components = as.formula(paste0('~
   Intercept_PC(1, model = "linear", mean.linear = -10, prec.linear = 0.01)+
-  Intercept_CL(1, model = "linear", mean.linear = log(0.01), prec.linear = 0.01)+
   kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_PC_prec))+
-  kappa_CL(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_CL_prec))+
   spde_coarse(main = coordinates, model = matern_coarse) + 
-  CL_effort(main = DurationInHours,model = CL_duration_spde) +
   
   ',
                                        
@@ -330,8 +329,10 @@ for (sp_code in species_to_fit){
   # --------------------------------
   
   # If species has a QPAD offset calculated, use it.  Otherwise, fit without offsets
-  if (offset_exists){
-    model_formula_PC = as.formula(paste0('count ~
+  if (!offset_exists) next
+  
+  
+  model_formula_QPAD = as.formula(paste0('count ~
                   QPAD_offset +
                   Intercept_PC +
                   spde_coarse +
@@ -340,8 +341,8 @@ for (sp_code in species_to_fit){
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
                                          paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
-  } else {
-    model_formula_PC = as.formula(paste0('count ~
+  
+  model_formula_NULL = as.formula(paste0('count ~
                   Intercept_PC +
                   spde_coarse +
                   kappa_PC +
@@ -349,28 +350,13 @@ for (sp_code in species_to_fit){
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
                                          paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
-  }
   
-  model_formula_CL = as.formula(paste0('presence ~ log(1/exp(-exp(
-
-                  Intercept_CL+
-                  spde_coarse +
-                  CL_effort +
-                  kappa_CL + 
-                                       ',
-                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
-                                       "))-1)"))
-  
-  model_formula_PC
-  model_formula_CL
   
   # --------------------------------
   # Prediction formula (for creating density maps)
   # --------------------------------
   
-  pred_formula_PC = as.formula(paste0(' ~
+  pred_formula = as.formula(paste0(' ~
 
                   Intercept_PC +
                   spde_coarse +
@@ -379,81 +365,89 @@ for (sp_code in species_to_fit){
                                       " + ",
                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
   
-  
-  pred_formula_PC
-  
   # --------------------------------
   # Specify model likelihoods
   # --------------------------------
   
-  like_PC <- like(family = "poisson",
-                  formula = model_formula_PC,
+  like_QPAD <- like(family = "poisson",
+                  formula = model_formula_QPAD,
                   data = PC_sp)
   
-  like_CL <- like(family = "binomial",
-                  formula = model_formula_CL,
-                  data = CL_sp)
+  like_NULL <- like(family = "poisson",
+                    formula = model_formula_NULL,
+                    data = PC_sp)
   
   # --------------------------------
   # Select reasonable initial values (should not affect inference, but affects model convergence)
   # --------------------------------
   
-  inits <- c(-15,-2,rep(0,length(covariates_to_include)*2)) %>% as.list()
-  names(inits) <- c("Intercept_PC","Intercept_CL",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
+  inits <- c(-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
+  names(inits) <- c("Intercept_PC",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
   
   # --------------------------------
-  # Fit model
+  # Fit model with QPAD offsets
   # --------------------------------
   
-  fit <- bru(components = model_components, 
-             like_PC,like_CL,
+  fit_QPAD <- bru(components = model_components, 
+             like_QPAD,
              options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
                             bru_verbose = 4,
                             bru_max_iter = 10,
                             bru_initial = inits))
   
-  fit_time_min <- as.numeric(sum(fit$bru_timings$Time))/60
-  fit_time_min # about 30 min
-  fit_summary <- summary(fit) 
+  as.numeric(sum(fit$bru_timings$Time))/60
+
+  # --------------------------------
+  # Fit model without QPAD offsets
+  # --------------------------------
+  fit_NULL <- bru(components = model_components, 
+                  like_NULL,
+                  options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
+                                 bru_verbose = 4,
+                                 bru_max_iter = 10,
+                                 bru_initial = inits))
+  
+  as.numeric(sum(fit$bru_timings$Time))/60
+  
   
   # -------------------------------------------------------
   # Save model summary
   # -------------------------------------------------------
-  
-  model_fit <- list(
-    sp_code = sp_code,
-    species_name = Sask_spcd$CommonName[which(Sask_spcd$spcd == sp_code)],
-    species_label = Sask_spcd$Label[which(Sask_spcd$spcd == sp_code)],
-    fit_summary = fit_summary,
-    model_formula_PC = model_formula_PC,
-    pred_formula_PC = pred_formula_PC,
-    offset_exists = offset_exists,
-    offset_5min_Pointcount = offset_5min_Pointcount)
-  
-  save(model_fit, file = model_filename)
-  
-  # -------------------------------------------------------
-  # Generate predictions on 1 km x 1 km grid
-  # -------------------------------------------------------
-  
-  pred_grid <- SaskGrid
-  start = Sys.time()
-  nsamp = 500
-  pred_PC <- generate(fit,
-                      as(pred_grid,'Spatial'),
-                      formula =  pred_formula_PC,
-                      n.samples = nsamp)
-  
-  end = Sys.time()
-  end-start # about 15 min
-  
-  # -------------------------------------------------------
-  # Save model predictions as a matrix of size (nrow = npixels) x (ncol = nsamples)
-  # Note: these prediction files are HUGE (2.5 GB each)
-  # For atlas purposes, may want to just calculate and save pixel-level summaries (mean of posterior, SE, LCI, UCI, etc),
-  #   rather than 500 samples from the posterior for every pixel
-  # -------------------------------------------------------
-  
-  save(pred_PC,file = prediction_filename) 
+  # 
+  # model_fit <- list(
+  #   sp_code = sp_code,
+  #   species_name = Sask_spcd$CommonName[which(Sask_spcd$spcd == sp_code)],
+  #   species_label = Sask_spcd$Label[which(Sask_spcd$spcd == sp_code)],
+  #   fit_summary = fit_summary,
+  #   model_formula_PC = model_formula_PC,
+  #   pred_formula_PC = pred_formula_PC,
+  #   offset_exists = offset_exists,
+  #   offset_5min_Pointcount = offset_5min_Pointcount)
+  # 
+  # save(model_fit, file = model_filename)
+  # 
+  # # -------------------------------------------------------
+  # # Generate predictions on 1 km x 1 km grid
+  # # -------------------------------------------------------
+  # 
+  # pred_grid <- SaskGrid
+  # start = Sys.time()
+  # nsamp = 500
+  # pred_PC <- generate(fit,
+  #                     as(pred_grid,'Spatial'),
+  #                     formula =  pred_formula_PC,
+  #                     n.samples = nsamp)
+  # 
+  # end = Sys.time()
+  # end-start # about 15 min
+  # 
+  # # -------------------------------------------------------
+  # # Save model predictions as a matrix of size (nrow = npixels) x (ncol = nsamples)
+  # # Note: these prediction files are HUGE (2.5 GB each)
+  # # For atlas purposes, may want to just calculate and save pixel-level summaries (mean of posterior, SE, LCI, UCI, etc),
+  # #   rather than 500 samples from the posterior for every pixel
+  # # -------------------------------------------------------
+  # 
+  # save(pred_PC,file = prediction_filename) 
   
 } # close species loop
