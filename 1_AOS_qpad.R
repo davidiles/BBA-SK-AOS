@@ -413,8 +413,11 @@ for (sp_code in species_to_fit){
   # Compare two models
   # -------------------------------------------------------
   
+  # Compare WAIC for each model
   fit_QPAD$waic$waic
   fit_NULL$waic$waic
+  
+  # Generate spatial predictions from each model, and calculate cross-validation metrics
   
   # 
   # model_fit <- list(
