@@ -199,8 +199,8 @@ SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval.shp") %>%
 
 
 #species_to_fit <- c("RWBL")
-
 waic_df <- xval_df <- data.frame()
+
 
 for (sp_code in species_to_fit){
   
@@ -540,11 +540,22 @@ for (sp_code in species_to_fit){
   
   print(sp_code)
   
+  save(xval_df, file = "../AOS_precision/output/xval_df_QPAD.RData")
+  save(waic_df, file = "../AOS_precision/output/waic_df_QPAD.RData")
+  
 } # close species loop
 
-ggplot(data = waic_df)+
-  geom_point(aes(x = waic_NULL, y = waic_QPAD))+
-  geom_abline(slope=1,intercept=0)+
-  theme_bw()
 
-hist(waic_df$waic_QPAD - waic_df$waic_NULL, breaks = 50)
+# --------------------------------
+# Compare crossvalidation accuracy
+# --------------------------------
+
+# Difference in log likelihood
+xval_df$delta_LL <- xval_df$logLik_QPAD - xval_df$logLik_NULL
+
+hist(xval_df$delta_LL)
+
+mean(xval_df$delta_LL)
+median(xval_df$delta_LL)
+
+mean(xval_df$delta_LL>0)
