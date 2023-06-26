@@ -24,7 +24,10 @@ my_packs <- c(
   'inlabru','ebirdst',
   
   # For plotting
-  'viridis','scales','ggpubr','ggtext')
+  'viridis','scales','ggpubr','ggtext',
+  
+  # Cross-validation
+  'pROC')
 
 if (any(!my_packs %in% installed.packages()[, 'Package'])) {install.packages(my_packs[which(!my_packs %in% installed.packages()[, 'Package'])],dependencies = TRUE)}
 lapply(my_packs, require, character.only = TRUE)
@@ -190,9 +193,18 @@ length(species_to_fit) # 169 species
 # ------------------------------------------------------------------------------------
 # ************************************************************************************
 
-species_to_fit <- c("RWBL")
+# Load squares to withhold for crossvalidation
+SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval.shp") %>%
+  st_transform(crs(PC_surveyinfo))
+
+
+#species_to_fit <- c("RWBL")
+
+waic_df <- xval_df <- data.frame()
 
 for (sp_code in species_to_fit){
+  
+  if (sp_code %in% waic_df$sp_code) next
   
   print(sp_code)
   
@@ -248,11 +260,25 @@ for (sp_code in species_to_fit){
   }
   
   # --------------------------------
+  # Withhold data for cross-validation
+  # --------------------------------
+  
+  # Intersect with SaskSquares dataframe
+  PC_sf <- st_intersection(PC_sf, SaskSquares)
+  CL_sf <- st_intersection(CL_sf, SaskSquares)
+  
+  # --------------------------------
   # Convert to spatial objects (required by INLA)
   # --------------------------------
   
   PC_sp <- as(PC_sf,'Spatial')
   CL_sp <- as(CL_sf,'Spatial')
+  
+  PC_xval <- subset(PC_sp, fold == 1)
+  CL_xval <- subset(CL_sp, fold == 1)
+  
+  PC_sp <- subset(PC_sp, fold != 1)
+  CL_sp <- subset(CL_sp, fold != 1)
   
   # --------------------------------
   # Create a spatial mesh, which is used to fit the residual spatial field
@@ -361,17 +387,17 @@ for (sp_code in species_to_fit){
                   Intercept_PC +
                   spde_coarse +
                    ',
-                                      paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                      " + ",
-                                      paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
+                                   paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+                                   " + ",
+                                   paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
   
   # --------------------------------
   # Specify model likelihoods
   # --------------------------------
   
   like_QPAD <- like(family = "poisson",
-                  formula = model_formula_QPAD,
-                  data = PC_sp)
+                    formula = model_formula_QPAD,
+                    data = PC_sp)
   
   like_NULL <- like(family = "poisson",
                     formula = model_formula_NULL,
@@ -389,14 +415,14 @@ for (sp_code in species_to_fit){
   # --------------------------------
   
   fit_QPAD <- bru(components = model_components, 
-             like_QPAD,
-             options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                            bru_verbose = 4,
-                            bru_max_iter = 10,
-                            bru_initial = inits))
+                  like_QPAD,
+                  options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
+                                 bru_verbose = 4,
+                                 bru_max_iter = 10,
+                                 bru_initial = inits))
   
   as.numeric(sum(fit_QPAD$bru_timings$Time))/60
-
+  
   # --------------------------------
   # Fit model without QPAD offsets
   # --------------------------------
@@ -410,50 +436,115 @@ for (sp_code in species_to_fit){
   as.numeric(sum(fit_NULL$bru_timings$Time))/60
   
   # -------------------------------------------------------
-  # Compare two models
+  # Store WAIC from each model
   # -------------------------------------------------------
   
   # Compare WAIC for each model
-  fit_QPAD$waic$waic
-  fit_NULL$waic$waic
+  waic_df <- rbind(waic_df,
+                   data.frame(sp_code = sp_code,
+                              waic_QPAD = fit_QPAD$waic$waic,
+                              waic_NULL = fit_NULL$waic$waic))
   
-  # Generate spatial predictions from each model, and calculate cross-validation metrics
+  # -------------------------------------------------------
+  # Store WAIC from each model
+  # -------------------------------------------------------
   
-  # 
-  # model_fit <- list(
-  #   sp_code = sp_code,
-  #   species_name = Sask_spcd$CommonName[which(Sask_spcd$spcd == sp_code)],
-  #   species_label = Sask_spcd$Label[which(Sask_spcd$spcd == sp_code)],
-  #   fit_summary = fit_summary,
-  #   model_formula_PC = model_formula_PC,
-  #   pred_formula_PC = pred_formula_PC,
-  #   offset_exists = offset_exists,
-  #   offset_5min_Pointcount = offset_5min_Pointcount)
-  # 
-  # save(model_fit, file = model_filename)
-  # 
-  # # -------------------------------------------------------
-  # # Generate predictions on 1 km x 1 km grid
-  # # -------------------------------------------------------
-  # 
-  # pred_grid <- SaskGrid
-  # start = Sys.time()
-  # nsamp = 500
-  # pred_PC <- generate(fit,
-  #                     as(pred_grid,'Spatial'),
-  #                     formula =  pred_formula_PC,
-  #                     n.samples = nsamp)
-  # 
-  # end = Sys.time()
-  # end-start # about 15 min
-  # 
-  # # -------------------------------------------------------
-  # # Save model predictions as a matrix of size (nrow = npixels) x (ncol = nsamples)
-  # # Note: these prediction files are HUGE (2.5 GB each)
-  # # For atlas purposes, may want to just calculate and save pixel-level summaries (mean of posterior, SE, LCI, UCI, etc),
-  # #   rather than 500 samples from the posterior for every pixel
-  # # -------------------------------------------------------
-  # 
-  # save(pred_PC,file = prediction_filename) 
+  # Compare WAIC for each model
+  waic_df <- rbind(waic_df,
+                   data.frame(sp_code = sp_code,
+                              waic_QPAD = fit_QPAD$waic$waic,
+                              waic_NULL = fit_NULL$waic$waic))
+  
+  # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  # Cross-validation on withheld data
+  # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+  PC_xval_df <- PC_xval %>%
+    as.data.frame() %>% 
+    mutate(presence = as.numeric(count>0))
+  
+  # -------------------------------------------------------
+  # Generate spatial predictions from model with QPAD offset, and calculate xval metrics
+  # -------------------------------------------------------
+  
+  start <- Sys.time()
+  
+  # Generate predictions based on model with QPAD offsets
+  pred_QPAD <- generate(fit_QPAD, 
+                        PC_xval, 
+                        formula = ~ Intercept_PC + spde_coarse + QPAD_offset,
+                        n.samples = 500)
+  
+  # Full distribution of predictions (500 samples) for each withheld data point
+  fit_count_QPAD = exp(pred_QPAD)
+  fit_presence_QPAD = 1-exp(-fit_count_QPAD)
+  
+  # Use mean of those distributions to evaluate cross-validation accuracy
+  yhat_QPAD <- apply(fit_count_QPAD,1,mean)
+  phat_QPAD <- apply(fit_presence_QPAD,1,mean)
+  
+  AUC_QPAD = auc(PC_xval_df$presence, phat_QPAD) %>% as.numeric()
+  MSE_QPAD = mean(( PC_xval_df$count - yhat_QPAD)^2)
+  MAE_QPAD = mean(abs( PC_xval_df$count - yhat_QPAD))
+  cor_QPAD = cor( PC_xval_df$count, yhat_QPAD) %>% as.numeric()
+  logLik_QPAD = sum(log((exp(-yhat_QPAD)*yhat_QPAD^PC_xval_df$count)/factorial(PC_xval_df$count)))
+  
+  # -------------------------------------------------------
+  # Generate spatial predictions from NULL model and calculate xval metrics
+  # -------------------------------------------------------
+  
+  # Generate predictions based on model with NULL offsets
+  pred_NULL <- generate(fit_NULL, 
+                        PC_xval, 
+                        formula = ~ Intercept_PC + spde_coarse,
+                        n.samples = 500)
+  
+  # Full distribution of predictions (500 samples) for each withheld data point
+  fit_count_NULL = exp(pred_NULL)
+  fit_presence_NULL = 1-exp(-fit_count_NULL)
+  
+  # Use mean of those distributions to evaluate cross-validation accuracy
+  yhat_NULL <- apply(fit_count_NULL,1,mean)
+  phat_NULL <- apply(fit_presence_NULL,1,mean)
+  
+  AUC_NULL = auc(PC_xval_df$presence, apply(fit_presence_NULL,1,mean)) %>% as.numeric()
+  MSE_NULL = mean(( PC_xval_df$count - apply(fit_count_NULL,1,mean))^2)
+  MAE_NULL = mean(abs( PC_xval_df$count - apply(fit_count_NULL,1,mean)))
+  cor_NULL = cor( PC_xval_df$count, apply(fit_count_NULL,1,mean)) %>% as.numeric()
+  logLik_NULL = sum(log((exp(-yhat_NULL)*yhat_NULL^PC_xval_df$count)/factorial(PC_xval_df$count)))
+  
+  end <- Sys.time()
+  
+  end-start
+  
+  # Compare WAIC for each model
+  xval_df <- rbind(xval_df,
+                   data.frame(sp_code = sp_code,
+                              
+                              # Model fit with QPAD offset
+                              AUC_QPAD = AUC_QPAD,
+                              MSE_QPAD = MSE_QPAD,
+                              MAE_QPAD = MAE_QPAD,
+                              cor_QPAD = cor_QPAD,
+                              logLik_QPAD = logLik_QPAD,
+                              
+                              # Model fit with NULL offset
+                              AUC_NULL = AUC_NULL,
+                              MSE_NULL = MSE_NULL,
+                              MAE_NULL = MAE_NULL,
+                              cor_NULL = cor_NULL,
+                              logLik_NULL = logLik_NULL
+                              
+                              )
+                   )
+  
+  print(sp_code)
   
 } # close species loop
+
+ggplot(data = waic_df)+
+  geom_point(aes(x = waic_NULL, y = waic_QPAD))+
+  geom_abline(slope=1,intercept=0)+
+  theme_bw()
+
+hist(waic_df$waic_QPAD - waic_df$waic_NULL, breaks = 50)
