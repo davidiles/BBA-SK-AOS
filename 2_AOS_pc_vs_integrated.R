@@ -175,13 +175,31 @@ species_relabund_DO <- colSums(DO_matrix[,-1]>0,na.rm = TRUE) %>% sort(decreasin
 species_relabund_DO$Species <- rownames(species_relabund_DO)
 species_relabund <- full_join(species_relabund_PC,species_relabund_DO)
 
-# Must have been detected in at least 50 point counts
-species_to_fit <- subset(species_relabund, PC >= 50)$Species
+# Calculate proportion of observations in either PC or Checklists (DO)
+species_relabund$proportion_PC <- species_relabund$PC/(species_relabund$PC + species_relabund$DO)
 
-# Remove "unknown" species
-species_to_fit <- species_to_fit[-which(species_to_fit %in% c("UNDU","UNGU","UNWO","UNYE"))]
+# --------------
+# Conduct analysis on a subset of species, with varying proportions of point count data
+# --------------
+set.seed(1)
+species_relabund <- subset(species_relabund, 
+                           !is.na(PC) & 
+                             PC >= 100 &
+                             Species %!in% c("UNDU","UNGU","UNWO","UNYE"))
 
-length(species_to_fit) # 169 species
+
+species_to_fit <- sample_n(species_relabund, size = 50, prob = 1-species_relabund$proportion_PC) %>%
+  arrange(proportion_PC)
+species_to_fit$Species <- factor(species_to_fit$Species, levels = species_to_fit$Species)
+
+plot(proportion_PC ~ PC, data = species_relabund)
+points(proportion_PC ~ PC, data = species_to_fit, pch = 19)
+
+ggplot(species_to_fit, aes(y = Species, x = proportion_PC))+
+  geom_bar(stat = "identity")+
+  theme_bw()
+
+length(species_to_fit$Species) # 50 species
 
 # ************************************************************************************
 # ------------------------------------------------------------------------------------
@@ -193,22 +211,16 @@ length(species_to_fit) # 169 species
 SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval.shp") %>%
   st_transform(crs(PC_surveyinfo))
 
-species_to_fit <- c("RWBL")
-
 xval_df <- data.frame()
+if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
+  load("../AOS_precision/output/xval_df_integrated.RData")
+}
 
-for (sp_code in species_to_fit){
+for (sp_code in species_to_fit$Species){
   
   if (sp_code %in% xval_df$sp_code) next
   
   print(sp_code)
-  
-  # If model has already been fit, skip it
-  model_filename <- paste0("!Results/Model_Summaries/", sp_code, "_model_summary.RData")
-  prediction_filename <- paste0("!Results/Density_Predictions/Prediction_Matrix_", sp_code, ".RData")
-  
-  # If results have already been generated, skip this species
-  if (file.exists(model_filename) & file.exists(prediction_filename)) next
   
   # --------------------------------
   # Prepare data for this species
@@ -352,11 +364,10 @@ for (sp_code in species_to_fit){
   # --------------------------------
   
   # If species has a QPAD offset calculated, use it.  Otherwise, fit without offsets
-  if (!offset_exists) next
+  #if (!offset_exists) next
   
   
   model_formula_PC = as.formula(paste0('count ~
-                  QPAD_offset +
                   Intercept_PC +
                   spde_coarse +
                   kappa_PC +
@@ -441,7 +452,7 @@ for (sp_code in species_to_fit){
   
   pred_PConly <- generate(fit_PConly, 
                         PC_xval, 
-                        formula = ~ Intercept_PC + spde_coarse + QPAD_offset,
+                        formula = ~ Intercept_PC + spde_coarse,
                         n.samples = 500)
   fit_count_PConly = exp(pred_PConly)
   fit_presence_PConly = 1-exp(-fit_count_PConly)
@@ -480,7 +491,7 @@ for (sp_code in species_to_fit){
   # Crossvalidation for point count data
   pred_integrated_PC <- generate(fit_integrated, 
                                  PC_xval, 
-                                 formula = ~ Intercept_PC + spde_coarse + QPAD_offset,
+                                 formula = ~ Intercept_PC + spde_coarse,
                                  n.samples = 500)
   fit_count_integrated_PC = exp(pred_integrated_PC)
   fit_presence_integrated_PC = 1-exp(-fit_count_integrated_PC)
@@ -550,12 +561,17 @@ for (sp_code in species_to_fit){
 # Compare crossvalidation accuracy
 # --------------------------------
 
-# Difference in log likelihood
-xval_df$delta_LL <- xval_df$logLik_QPAD - xval_df$logLik_NULL
+# Does integrated model improve log likelihood of withheld point counts?
+hist(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
 
-hist(xval_df$delta_LL)
+mean(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
+mean((xval_df$logLik_integrated_PC - xval_df$logLik_PConly)>0)
+median(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
 
-mean(xval_df$delta_LL)
-median(xval_df$delta_LL)
+# Does integrated model improve log likelihood of withheld checklists?
+hist(xval_df$logLik_integrated_CL - xval_df$logLik_CLonly)
 
-mean(xval_df$delta_LL>0)
+mean(xval_df$logLik_integrated_CL - xval_df$logLik_CLonly)
+mean((xval_df$logLik_integrated_CL - xval_df$logLik_CLonly)>0)
+median(xval_df$logLik_integrated_CL - xval_df$logLik_CLonly)
+
