@@ -379,19 +379,6 @@ for (sp_code in species_to_fit){
   
   
   # --------------------------------
-  # Prediction formula (for creating density maps)
-  # --------------------------------
-  
-  pred_formula = as.formula(paste0(' ~
-
-                  Intercept_PC +
-                  spde_coarse +
-                   ',
-                                   paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                   " + ",
-                                   paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
-  
-  # --------------------------------
   # Specify model likelihoods
   # --------------------------------
   
@@ -434,16 +421,6 @@ for (sp_code in species_to_fit){
                                  bru_initial = inits))
   
   as.numeric(sum(fit_NULL$bru_timings$Time))/60
-  
-  # -------------------------------------------------------
-  # Store WAIC from each model
-  # -------------------------------------------------------
-  
-  # Compare WAIC for each model
-  waic_df <- rbind(waic_df,
-                   data.frame(sp_code = sp_code,
-                              waic_QPAD = fit_QPAD$waic$waic,
-                              waic_NULL = fit_NULL$waic$waic))
   
   # -------------------------------------------------------
   # Store WAIC from each model
