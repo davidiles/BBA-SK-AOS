@@ -212,9 +212,9 @@ SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval.shp") %>%
   st_transform(crs(PC_surveyinfo))
 
 xval_df <- data.frame()
-if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
-  load("../AOS_precision/output/xval_df_integrated.RData")
-}
+#if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
+#  load("../AOS_precision/output/xval_df_integrated.RData")
+#}
 
 for (sp_code in species_to_fit$Species){
   
