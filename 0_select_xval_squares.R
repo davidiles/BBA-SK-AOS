@@ -37,16 +37,34 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # Load SaskSquares spatial object
 SaskSquares <- read_sf("!Shapefiles/SaskSquares/SaskSquares.shp")
 
-# Centroids of sask atlas squares
-SK_centroids <- st_centroid(SaskSquares)
+# Create 100 km grid across study region
+ext <- extent(SaskSquares)
+ext[1] <- ext[1] - 100000
+ext[2] <- ext[2] + 100000
+ext[3] <- ext[3] - 100000
+ext[4] <- ext[4] + 100000
+
+grid <- raster(ext, resolution = 100000, crs = crs(SaskSquares))
+grid <- as(grid, "SpatialPolygons") %>% st_as_sf()
+grid$block_id <- 1:nrow(grid)
+grid_cent <- grid %>% st_centroid()
 
 # Divide grid into 5 spatially balanced folds
-grts_grid <- spsurvey::grts(SK_centroids, n_base = nrow(SK_centroids))$sites_base
+grts_grid <- spsurvey::grts(grid_cent, n_base = nrow(grid_cent))$sites_base
 grts_grid$grts_order <- 1:nrow(grts_grid)
-grts_grid$fold <- cut(grts_grid$grts_order,seq(1,max(grts_grid$grts_order),length.out = 6),include.lowest = TRUE) %>% as.numeric()
-table(grts_grid$fold)
+grts_grid <- grts_grid %>% arrange(block_id)
+grid$grts_order <- grts_grid$grts_order
+grid$fold <- cut(grid$grts_order,seq(1,max(grid$grts_order),length.out = 6),include.lowest = TRUE) %>% as.numeric()
+table(grid$fold)
 
-SaskSquares_xval <- full_join(SaskSquares,as.data.frame(grts_grid)[,c("SQUARE_ID","fold","grts_order")])
+plot(as(SaskSquares,'Spatial'))
+lines(as(grid,"Spatial"), col = "blue")
+
+# 100 km block to which each SaskSquare belongs
+SaskSquares_centroids <- st_centroid(SaskSquares)
+tmp <- st_intersection(SaskSquares_centroids,grid)
+
+SaskSquares_xval <- full_join(SaskSquares,as.data.frame(tmp)[,c("SQUARE_ID","block_id","fold","grts_order")])
 
 ggplot(SaskSquares_xval, aes(fill = fold))+
   geom_sf(col = "transparent")+

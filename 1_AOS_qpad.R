@@ -527,12 +527,9 @@ for (sp_code in species_to_fit){
 # Compare crossvalidation accuracy
 # --------------------------------
 
-# Difference in log likelihood
-xval_df$delta_LL <- xval_df$logLik_QPAD - xval_df$logLik_NULL
+hist(xval_df$logLik_QPAD - xval_df$logLik_NULL)
 
-hist(xval_df$delta_LL)
+mean(xval_df$logLik_QPAD - xval_df$logLik_NULL)
+median(xval_df$logLik_QPAD - xval_df$logLik_NULL)
 
-mean(xval_df$delta_LL)
-median(xval_df$delta_LL)
-
-mean(xval_df$delta_LL>0)
+mean((xval_df$logLik_QPAD - xval_df$logLik_NULL)>0)

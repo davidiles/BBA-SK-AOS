@@ -20,7 +20,7 @@ my_packs <- c(
   'inlabru','ebirdst',
   
   # For plotting
-  'viridis','scales','ggpubr','ggtext',
+  'viridis','scales','ggpubr','ggtext','ggrepel',
   
   # Cross-validation
   'pROC')
@@ -188,7 +188,7 @@ species_relabund <- subset(species_relabund,
                              Species %!in% c("UNDU","UNGU","UNWO","UNYE"))
 
 
-species_to_fit <- sample_n(species_relabund, size = 50, prob = 1-species_relabund$proportion_PC) %>%
+species_to_fit <- sample_n(species_relabund, size = 10, prob = 1-species_relabund$proportion_PC) %>%
   arrange(proportion_PC)
 species_to_fit$Species <- factor(species_to_fit$Species, levels = species_to_fit$Species)
 
@@ -212,138 +212,168 @@ SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval.shp") %>%
   st_transform(crs(PC_surveyinfo))
 
 xval_df <- data.frame()
-#if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
-#  load("../AOS_precision/output/xval_df_integrated.RData")
-#}
+if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
+ load("../AOS_precision/output/xval_df_integrated.RData")
+}
 
-for (sp_code in species_to_fit$Species){
-  
-  if (sp_code %in% xval_df$sp_code) next
-  
-  print(sp_code)
-  
-  # --------------------------------
-  # Prepare data for this species
-  # --------------------------------
-  
-  PC_sf <- PC_surveyinfo %>% mutate(count = NA) # Point counts
-  CL_sf <- DO_surveyinfo %>% mutate(count = NA) # Checklist counts (linear transect only, currently)
-  
-  # Fill in counts
-  if (sp_code %in% colnames(PC_matrix)) PC_sf$count <- PC_matrix[,sp_code]
-  if (sp_code %in% colnames(DO_matrix)) CL_sf$count <- DO_matrix[,sp_code]
-  
-  PC_sf <- subset(PC_sf, !is.na(count))
-  CL_sf <- subset(CL_sf, !is.na(count)) 
-  
-  # --------------------------------
-  # Checklists will be treated as presence/absence only
-  # --------------------------------
-  
-  CL_sf$presence <- as.numeric(CL_sf$count > 0)
-  
-  # --------------------------------
-  # Check if QPAD offsets exist, and generate them if so
-  # --------------------------------
-  
-  offset_exists <- FALSE
-  offset_5min_Pointcount <- 0
-  sp_cr = sp_edr = NA
-  sp_napops <- subset(napops_species,Species == sp_code)
-  if (nrow(sp_napops)>0){
-    if (sp_napops$Removal == 1 & sp_napops$Distance == 1){
-      offset_exists <- TRUE
-      sp_cr <- cue_rate(species = sp_code,od = 153, tssr = 1, model = 1)
-      sp_edr <- edr(species = sp_code,road = FALSE, forest = 0.5,model = 1)
-      
-      # Calculate A and p, which jointly determine offset
-      PC_sf$A_metres <- c(pi*sp_edr$EDR_est^2)
-      PC_sf$p <- 1-exp(-PC_sf$DurationInMinutes*sp_cr$CR_est[1,1])
-      PC_sf$QPAD_offset <- log(PC_sf$A_metres * PC_sf$p)
-      
-      # Calculate offset for a 5-minute point count (needed later in analysis)
-      offset_5min_Pointcount <- c(log((pi*sp_edr$EDR_est^2)*(1-exp(-5*sp_cr$CR_est[1,1]))))
+for (fold in sort(unique(SaskSquares$fold))){
+  for (sp_code in species_to_fit$Species){
+    
+    # Check if this species/xval fold have already been run. If so, skip
+    if (nrow(xval_df)>0){
+      if (nrow(subset(xval_df,Species == sp_code & xval_fold == fold))>0) next
     }
-  }
-  
-  # --------------------------------
-  # Withhold data for cross-validation
-  # --------------------------------
-  
-  # Intersect with SaskSquares dataframe
-  PC_sf <- st_intersection(PC_sf, SaskSquares)
-  CL_sf <- st_intersection(CL_sf, SaskSquares)
-  
-  # --------------------------------
-  # Convert to spatial objects (required by INLA)
-  # --------------------------------
-  
-  PC_sp <- as(PC_sf,'Spatial')
-  CL_sp <- as(CL_sf,'Spatial')
-  
-  PC_xval <- subset(PC_sp, fold == 1)
-  CL_xval <- subset(CL_sp, fold == 1)
-  
-  PC_sp <- subset(PC_sp, fold != 1)
-  CL_sp <- subset(CL_sp, fold != 1)
-  
-  # --------------------------------
-  # Create a spatial mesh, which is used to fit the residual spatial field
-  # --------------------------------
-  
-  # In meters
-  mesh_cutoff <- 30000         
-  max_edge_inner <- 30000   
-  max_edge_outer <- 150000
-  
-  mesh_spatial <- inla.mesh.2d(loc.domain = PC_sp,
-                               cutoff = mesh_cutoff, 
-                               max.edge = c(max_edge_inner,max_edge_outer))
-  
-  mesh_locs <- mesh_spatial$loc[,c(1,2)] %>% as.data.frame()
-  
-  matern_coarse <- inla.spde2.pcmatern(mesh_spatial,
-                                       prior.range = c(100000, 0.1), # 10% chance range is smaller than 100000
-                                       prior.sigma = c(1, 0.1),      # 10% chance sd is larger than 1
-                                       constr = TRUE)                # sum to 1 constraint
-  
-  # --------------------------------
-  # Define square-level random effects
-  # --------------------------------
-  
-  # Point counts
-  kappa_PC_prec <- list(prior = "pcprec", param = c(1,0.1))
-  PC_sp$sq_idx <- as.numeric(factor(PC_sp$sq_id))
-  
-  # Linear transects
-  kappa_CL_prec <- list(prior = "pcprec", param = c(1,0.1))
-  CL_sp$sq_idx <- as.numeric(factor(CL_sp$sq_id))
-  
-  # --------------------------------
-  # Create 'temporal mesh' to model effect of checklist duration
-  # --------------------------------
-  
-  CL_duration_meshpoints <- seq(0,max(CL_sp$DurationInHours)+0.1,length.out = 11)
-  CL_duration_mesh1D = inla.mesh.1d(CL_duration_meshpoints,boundary="free")
-  CL_duration_spde = inla.spde2.pcmatern(CL_duration_mesh1D,
-                                         prior.range = c(1,0.9), # 90% chance range is smaller than 1
-                                         prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
-  
-  
-  # --------------------------------
-  # NOTE: I've written the code below so we can add/remove covariates easily by including them
-  #       in the vector called "covariates_to_include"
-  #
-  #       We could simplify this potentially to make the code easier to read/understand
-  # --------------------------------
-  
-  # --------------------------------
-  # Model components
-  # --------------------------------
-  
-  covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
-  
-  model_components = as.formula(paste0('~
+    
+    print(paste(sp_code," fold ",fold))
+    
+    # --------------------------------
+    # Prepare data for this species
+    # --------------------------------
+    
+    PC_sf <- PC_surveyinfo %>% mutate(count = NA) # Point counts
+    CL_sf <- DO_surveyinfo %>% mutate(count = NA) # Checklist counts (linear transect only, currently)
+    
+    # Fill in counts
+    if (sp_code %in% colnames(PC_matrix)) PC_sf$count <- PC_matrix[,sp_code]
+    if (sp_code %in% colnames(DO_matrix)) CL_sf$count <- DO_matrix[,sp_code]
+    
+    PC_sf <- subset(PC_sf, !is.na(count))
+    CL_sf <- subset(CL_sf, !is.na(count)) 
+    
+    # --------------------------------
+    # Checklists will be treated as presence/absence only
+    # --------------------------------
+    
+    CL_sf$presence <- as.numeric(CL_sf$count > 0)
+    
+    # --------------------------------
+    # Check if QPAD offsets exist, and generate them if so
+    # --------------------------------
+    
+    offset_exists <- FALSE
+    offset_5min_Pointcount <- 0
+    sp_cr = sp_edr = NA
+    sp_napops <- subset(napops_species,Species == sp_code)
+    if (nrow(sp_napops)>0){
+      if (sp_napops$Removal == 1 & sp_napops$Distance == 1){
+        offset_exists <- TRUE
+        sp_cr <- cue_rate(species = sp_code,od = 153, tssr = 1, model = 1)
+        sp_edr <- edr(species = sp_code,road = FALSE, forest = 0.5,model = 1)
+        
+        # Calculate A and p, which jointly determine offset
+        PC_sf$A_metres <- c(pi*sp_edr$EDR_est^2)
+        PC_sf$p <- 1-exp(-PC_sf$DurationInMinutes*sp_cr$CR_est[1,1])
+        PC_sf$QPAD_offset <- log(PC_sf$A_metres * PC_sf$p)
+        
+        # Calculate offset for a 5-minute point count (needed later in analysis)
+        offset_5min_Pointcount <- c(log((pi*sp_edr$EDR_est^2)*(1-exp(-5*sp_cr$CR_est[1,1]))))
+      }
+    }
+    
+    
+    # Intersect with SaskSquares dataframe
+    PC_sf <- st_intersection(PC_sf, SaskSquares)
+    CL_sf <- st_intersection(CL_sf, SaskSquares)
+    
+    # --------------------------------
+    # Withhold data for cross-validation
+    # --------------------------------
+    
+    PC_sp <- as(PC_sf,'Spatial')
+    CL_sp <- as(CL_sf,'Spatial')
+    
+    PC_xval <- PC_sp[PC_sp$fold == fold,]
+    #CL_xval <- subset(CL_sp, fold == 1)
+    
+    PC_sp <- PC_sp[PC_sp$fold != fold,]
+    #CL_sp <- subset(CL_sp, fold != 1)
+    
+    # --------------------------------
+    # Optional: plot species data
+    # --------------------------------
+    
+    PC_sf <- st_as_sf(PC_sp)
+    CL_sf <- st_as_sf(CL_sp)
+    PC_xval_sf <- st_as_sf(PC_xval)
+    #CL_xval_sf <- st_as_sf(CL_xval)
+    
+    # ggplot() + 
+    #   geom_sf(data = SaskSquares, col = "transparent", fill = "gray90") + 
+    #   
+    #   # Locations we are predicting into (withheld data)
+    #   geom_sf(data = subset(PC_xval_sf), size = 1, col = "yellow", alpha = 0.2) + 
+    #   #geom_sf(data = CL_xval_sf, size = 1, col = "red") + 
+    #   
+    #   # Point count data for training (black = species observed)
+    #   geom_sf(data = subset(PC_sf, count == 0), size = 0.5, col = "white") + 
+    #   geom_sf(data = subset(PC_sf, count > 0), size = 0.5) + 
+    #   
+    #   # Checklist data
+    #   geom_sf(data = subset(CL_sf, count == 0), size = 1, col = "red", shape = 4) + 
+    #   #geom_sf(data = subset(CL_sf, count > 0), size = 1, col = "red", shape = 19) + 
+    #   
+    #   theme_bw()
+    # 
+    
+    # --------------------------------
+    # Create a spatial mesh, which is used to fit the residual spatial field
+    # --------------------------------
+    
+    # In meters
+    mesh_cutoff <- 40000         
+    max_edge_inner <- 40000   
+    max_edge_outer <- 150000
+    
+    mesh_spatial <- inla.mesh.2d(loc.domain = PC_sp,
+                                 cutoff = mesh_cutoff, 
+                                 max.edge = c(max_edge_inner,max_edge_outer))
+    
+    mesh_locs <- mesh_spatial$loc[,c(1,2)] %>% as.data.frame()
+    dim(mesh_locs)
+    plot(mesh_spatial)
+    
+    matern_coarse <- inla.spde2.pcmatern(mesh_spatial,
+                                         prior.range = c(100000, 0.1), # 10% chance range is smaller than 100000
+                                         prior.sigma = c(1, 0.1),      # 10% chance sd is larger than 1
+                                         constr = TRUE)                # sum to 1 constraint
+    
+    # --------------------------------
+    # Define square-level random effects
+    # --------------------------------
+    
+    # Point counts
+    kappa_PC_prec <- list(prior = "pcprec", param = c(1,0.1))
+    PC_sp$sq_idx <- as.numeric(factor(PC_sp$sq_id))
+    
+    # Linear transects
+    kappa_CL_prec <- list(prior = "pcprec", param = c(1,0.1))
+    CL_sp$sq_idx <- as.numeric(factor(CL_sp$sq_id))
+    
+    # --------------------------------
+    # Create 'temporal mesh' to model effect of checklist duration
+    # --------------------------------
+    
+    CL_duration_meshpoints <- seq(0,max(CL_sp$DurationInHours)+0.1,length.out = 11)
+    CL_duration_mesh1D = inla.mesh.1d(CL_duration_meshpoints,boundary="free")
+    CL_duration_spde = inla.spde2.pcmatern(CL_duration_mesh1D,
+                                           prior.range = c(1,0.9), # 90% chance range is smaller than 1
+                                           prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
+    
+    
+    # --------------------------------
+    # NOTE: I've written the code below so we can add/remove covariates easily by including them
+    #       in the vector called "covariates_to_include"
+    #
+    #       We could simplify this potentially to make the code easier to read/understand
+    # --------------------------------
+    
+    # --------------------------------
+    # Model components
+    # --------------------------------
+    
+    covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
+    
+    model_components = as.formula(paste0('~
   Intercept_PC(1, model = "linear", mean.linear = -10, prec.linear = 0.01)+
   Intercept_CL(1, model = "linear", mean.linear = log(0.01), prec.linear = 0.01)+
   kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_PC_prec))+
@@ -351,23 +381,23 @@ for (sp_code in species_to_fit$Species){
   spde_coarse(main = coordinates, model = matern_coarse) + 
   CL_effort(main = DurationInHours,model = CL_duration_spde) +
   ',
-                                       
-                                       paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 16)', collapse = " + "))
-  )
-  
-  model_components
-  
-  # --------------------------------
-  # Model formulas (for Point count and Checklist likelihoods)
-  # --------------------------------
-  
-  # If species has a QPAD offset calculated, use it.  Otherwise, fit without offsets
-  #if (!offset_exists) next
-  
-  
-  model_formula_PC = as.formula(paste0('count ~
+                                         
+                                         paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "),
+                                         " + ",
+                                         paste0("Beta2_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 16)', collapse = " + "))
+    )
+    
+    model_components
+    
+    # --------------------------------
+    # Model formulas (for Point count and Checklist likelihoods)
+    # --------------------------------
+    
+    # If species has a QPAD offset calculated, use it.  Otherwise, fit without offsets
+    #if (!offset_exists) next
+    
+    
+    model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
                   spde_coarse +
                   kappa_PC +
@@ -375,187 +405,246 @@ for (sp_code in species_to_fit$Species){
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
                                          paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
-  
-  model_formula_CL = as.formula(paste0('presence ~ log(1/exp(-exp(
+    
+    model_formula_CL = as.formula(paste0('presence ~ log(1/exp(-exp(
 
                   Intercept_CL +
                   spde_coarse +
                   CL_effort +
                   kappa_CL + 
                                        ',
-                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
-                                       "))-1)"))
-  
-  # --------------------------------
-  # Specify model likelihoods
-  # --------------------------------
-  
-  like_PC <- like(family = "poisson",
+                                         paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+                                         " + ",
+                                         paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
+                                         "))-1)"))
+    
+    # --------------------------------
+    # Specify model likelihoods
+    # --------------------------------
+    
+    like_PC <- like(family = "poisson",
                     formula = model_formula_PC,
                     data = PC_sp)
-  
-  like_CL <- like(family = "binomial",
-                      formula = model_formula_CL,
-                      data = CL_sp)
+    
+    like_CL <- like(family = "binomial",
+                    formula = model_formula_CL,
+                    data = CL_sp)
+    
+    # --------------------------------
+    # Select reasonable initial values (should not affect inference, but affects model convergence)
+    # --------------------------------
+    
+    inits <- c(-5,-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
+    names(inits) <- c("Intercept_PC","Intercept_CL",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
+    
+    # --------------------------------
+    # Fit models
+    # --------------------------------
+    
+    start <- Sys.time()
+    
+    fit_PConly <- bru(components = model_components, 
+                      like_PC,
+                      options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
+                                     bru_verbose = 4,
+                                     bru_max_iter = 10,
+                                     bru_initial = inits))
+    
+    # fit_CLonly <- bru(components = model_components, 
+    #               like_CL,
+    #               options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
+    #                              bru_verbose = 4,
+    #                              bru_max_iter = 10,
+    #                              bru_initial = inits))
+    
+    fit_integrated <- bru(components = model_components, 
+                          like_PC,like_CL,
+                          options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
+                                         bru_verbose = 4,
+                                         bru_max_iter = 10,
+                                         bru_initial = inits))
+    
+    end <- Sys.time()
+    
+    # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    # Cross-validation on withheld data
+    # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+    
+    PC_xval_df <- PC_xval %>%
+      as.data.frame() %>% 
+      mutate(presence = as.numeric(count>0))
+    
+    #CL_xval_df <- CL_xval %>% as.data.frame()
+    
+    
+    pred_formula_PC = as.formula(paste0(' ~
 
-  # --------------------------------
-  # Select reasonable initial values (should not affect inference, but affects model convergence)
-  # --------------------------------
-  
-  inits <- c(-5,-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
-  names(inits) <- c("Intercept_PC","Intercept_CL",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
-  
-  # --------------------------------
-  # Fit models
-  # --------------------------------
-  
-  start <- Sys.time()
-  
-  fit_PConly <- bru(components = model_components, 
-                  like_PC,
-                  options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                                 bru_verbose = 4,
-                                 bru_max_iter = 10,
-                                 bru_initial = inits))
-  
-  fit_CLonly <- bru(components = model_components, 
-                like_CL,
-                options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                               bru_verbose = 4,
-                               bru_max_iter = 10,
-                               bru_initial = inits))
-  
-  fit_integrated <- bru(components = model_components, 
-                like_PC,like_CL,
-                options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                               bru_verbose = 4,
-                               bru_max_iter = 10,
-                               bru_initial = inits))
-  
-  end <- Sys.time()
-  
-  # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  # Cross-validation on withheld data
-  # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+                  Intercept_PC +
+                  spde_coarse +
+                   ',
+                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+                                        " + ",
+                                        paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
+    
+    
+    pred_formula_PC
+    
+    # -------------------------------------------------------
+    # Generate predictions from model fit only to point counts
+    # -------------------------------------------------------
+    
+    # pred_PConly <- generate(fit_PConly, 
+    #                         PC_xval, 
+    #                         formula = ~ Intercept_PC + spde_coarse,
+    #                         n.samples = 10)
+    
+    pred_PConly <- generate(fit_PConly, 
+                            PC_xval, 
+                            formula = pred_formula_PC,
+                            n.samples = 50)
+    
+    fit_count_PConly = exp(pred_PConly)
+    fit_presence_PConly = 1-exp(-fit_count_PConly)
+    yhat_PConly <- apply(fit_count_PConly,1,mean)
+    phat_PConly <- apply(fit_presence_PConly,1,mean)
+    
+    
+    
+    AUC_PConly = auc(PC_xval_df$presence, phat_PConly) %>% as.numeric()
+    MSE_PConly = mean(( PC_xval_df$count - yhat_PConly)^2)
+    MAE_PConly = mean(abs( PC_xval_df$count - yhat_PConly))
+    cor_PConly = cor( PC_xval_df$count, yhat_PConly) %>% as.numeric()
+    logLik_PConly <- sum(log(dpois(PC_xval_df$count,yhat_PConly))) #-371.0611
+    
+    PC_xval_sf$yhat <- yhat_PConly
+    PC_xval_sf$logLik <- log(dpois(PC_xval_df$count,yhat_PConly))
+    
+    # 
+    # # Actual observed range of this species
+    # ggplot()+
+    #   geom_sf(data = subset(PC_xval_sf, count == 0), col = "gray80")+
+    #   geom_sf(data = subset(PC_xval_sf, count != 0), col = "black")+
+    #   geom_sf(data = subset(PC_sf, count == 0), col = "gray80")+
+    #   geom_sf(data = subset(PC_sf, count != 0), col = "black")+
+    #   
+    #   #geom_sf(data = PC_xval_sf, aes(col = yhat), size = 0.1)+
+    #   scale_color_gradientn(colors = viridis(10))+
+    #   theme_bw()
+    # 
+    # ggplot()+
+    #   geom_sf(data = PC_xval_sf, aes(col = logLik))+
+    #   scale_color_gradientn(colors = viridis(10))+
+    #   theme_bw()
+    
+    
+    # -------------------------------------------------------
+    # Generate predictions from model fit only to checklists
+    # -------------------------------------------------------
+    
+    # pred_CLonly <- generate(fit_CLonly, 
+    #                         CL_xval, 
+    #                         formula = ~ Intercept_CL + spde_coarse + CL_effort,
+    #                         n.samples = 500)
+    # fit_count_CLonly = exp(pred_CLonly)
+    # fit_presence_CLonly = 1-exp(-fit_count_CLonly)
+    # yhat_CLonly <- apply(fit_count_CLonly,1,mean)
+    # phat_CLonly <- apply(fit_presence_CLonly,1,mean)
+    # 
+    # AUC_CLonly = auc(CL_xval_df$presence, phat_CLonly) %>% as.numeric()
+    # MSE_CLonly = mean(( CL_xval_df$count - yhat_CLonly)^2)
+    # MAE_CLonly = mean(abs( CL_xval_df$count - yhat_CLonly))
+    # cor_CLonly = cor( CL_xval_df$count, yhat_CLonly) %>% as.numeric()
+    # logLik_CLonly <- sum(log(dbinom(x = CL_xval_df$presence, size = rep(1,nrow(CL_xval_df)), prob = phat_CLonly)))
+    # 
+    # -------------------------------------------------------
+    # Generate predictions from integrated model
+    # -------------------------------------------------------
+    
+    # Crossvalidation for point count data
+    pred_integrated_PC <- generate(fit_integrated, 
+                                   PC_xval, 
+                                   formula = pred_formula_PC,
+                                   n.samples = 50)
+    fit_count_integrated_PC = exp(pred_integrated_PC)
+    fit_presence_integrated_PC = 1-exp(-fit_count_integrated_PC)
+    yhat_integrated_PC <- apply(fit_count_integrated_PC,1,mean)
+    phat_integrated_PC <- apply(fit_presence_integrated_PC,1,mean)
+    
+    AUC_integrated_PC = auc(PC_xval_df$presence, phat_integrated_PC) %>% as.numeric()
+    MSE_integrated_PC = mean(( PC_xval_df$count - yhat_integrated_PC)^2)
+    MAE_integrated_PC = mean(abs( PC_xval_df$count - yhat_integrated_PC))
+    cor_integrated_PC = cor( PC_xval_df$count, yhat_integrated_PC) %>% as.numeric()
+    logLik_integrated_PC <- sum(log(dpois(PC_xval_df$count,yhat_integrated_PC)))
+    
+    # # Crossvalidation for checklist data
+    # pred_integrated_CL <- generate(fit_integrated, 
+    #                                CL_xval, 
+    #                                formula = ~ Intercept_CL + spde_coarse + CL_effort,
+    #                                n.samples = 500)
+    # 
+    # fit_count_integrated_CL = exp(pred_integrated_CL)
+    # fit_presence_integrated_CL = 1-exp(-fit_count_integrated_CL)
+    # yhat_integrated_CL <- apply(fit_count_integrated_CL,1,mean)
+    # phat_integrated_CL <- apply(fit_presence_integrated_CL,1,mean)
+    # 
+    # AUC_integrated_CL = auc(CL_xval_df$presence, phat_integrated_CL) %>% as.numeric()
+    # MSE_integrated_CL = mean(( CL_xval_df$count - yhat_integrated_CL)^2)
+    # MAE_integrated_CL = mean(abs( CL_xval_df$count - yhat_integrated_CL))
+    # cor_integrated_CL = cor( CL_xval_df$count, yhat_integrated_CL) %>% as.numeric()
+    # logLik_integrated_CL <- sum(log(dbinom(x = CL_xval_df$presence, size = rep(1,nrow(CL_xval_df)), prob = phat_integrated_CL)))
+    # 
+    
+    if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
+      load("../AOS_precision/output/xval_df_integrated.RData")
+    }
+    
+    # Compare crossvalidation metrics
+    xval_df <- rbind(xval_df,
+                     data.frame(Species = sp_code,
+                                xval_fold = fold,
+                                
+                                # Crossvalidation metrics on withheld PC data
+                                # (compare model fit to PC only, versus integrated)
+                                AUC_PConly = AUC_PConly,
+                                AUC_integrated_PC = AUC_integrated_PC,
+                                
+                                cor_PConly = cor_PConly,
+                                cor_integrated_PC = cor_integrated_PC,
+                                
+                                logLik_PConly = logLik_PConly,
+                                logLik_integrated_PC = logLik_integrated_PC
+                                
+                                # Crossvalidation metrics on withheld CL data
+                                # (compare model fit to CL only, versus integrated)
+                                #AUC_CLonly = AUC_CLonly,
+                                #AUC_integrated_CL = AUC_integrated_CL,
+                                
+                                #cor_CLonly = cor_CLonly,
+                                #cor_integrated_CL = cor_integrated_CL,
+                                #logLik_CLonly = logLik_CLonly,
+                                #logLik_integrated_CL = logLik_integrated_CL
+                                
+                     )
+    )
+    
+    print(paste(sp_code," fold ",fold))
+    
+    save(xval_df, file = "../AOS_precision/output/xval_df_integrated.RData")
+    
+  } # close species loop
+} # xval fold
 
-  PC_xval_df <- PC_xval %>%
-    as.data.frame() %>% 
-    mutate(presence = as.numeric(count>0))
-  
-  CL_xval_df <- CL_xval %>% as.data.frame()
-  
-  # -------------------------------------------------------
-  # Generate predictions from model fit only to point counts
-  # -------------------------------------------------------
-  
-  pred_PConly <- generate(fit_PConly, 
-                        PC_xval, 
-                        formula = ~ Intercept_PC + spde_coarse,
-                        n.samples = 500)
-  fit_count_PConly = exp(pred_PConly)
-  fit_presence_PConly = 1-exp(-fit_count_PConly)
-  yhat_PConly <- apply(fit_count_PConly,1,mean)
-  phat_PConly <- apply(fit_presence_PConly,1,mean)
-  
-  AUC_PConly = auc(PC_xval_df$presence, phat_PConly) %>% as.numeric()
-  MSE_PConly = mean(( PC_xval_df$count - yhat_PConly)^2)
-  MAE_PConly = mean(abs( PC_xval_df$count - yhat_PConly))
-  cor_PConly = cor( PC_xval_df$count, yhat_PConly) %>% as.numeric()
-  logLik_PConly <- sum(log(dpois(PC_xval_df$count,yhat_PConly)))
-  
-  # -------------------------------------------------------
-  # Generate predictions from model fit only to checklists
-  # -------------------------------------------------------
-  
-  pred_CLonly <- generate(fit_CLonly, 
-                          CL_xval, 
-                          formula = ~ Intercept_CL + spde_coarse + CL_effort,
-                          n.samples = 500)
-  fit_count_CLonly = exp(pred_CLonly)
-  fit_presence_CLonly = 1-exp(-fit_count_CLonly)
-  yhat_CLonly <- apply(fit_count_CLonly,1,mean)
-  phat_CLonly <- apply(fit_presence_CLonly,1,mean)
-  
-  AUC_CLonly = auc(CL_xval_df$presence, phat_CLonly) %>% as.numeric()
-  MSE_CLonly = mean(( CL_xval_df$count - yhat_CLonly)^2)
-  MAE_CLonly = mean(abs( CL_xval_df$count - yhat_CLonly))
-  cor_CLonly = cor( CL_xval_df$count, yhat_CLonly) %>% as.numeric()
-  logLik_CLonly <- sum(log(dbinom(x = CL_xval_df$presence, size = rep(1,nrow(CL_xval_df)), prob = phat_CLonly)))
-  
-  # -------------------------------------------------------
-  # Generate predictions from integrated model
-  # -------------------------------------------------------
-  
-  # Crossvalidation for point count data
-  pred_integrated_PC <- generate(fit_integrated, 
-                                 PC_xval, 
-                                 formula = ~ Intercept_PC + spde_coarse,
-                                 n.samples = 500)
-  fit_count_integrated_PC = exp(pred_integrated_PC)
-  fit_presence_integrated_PC = 1-exp(-fit_count_integrated_PC)
-  yhat_integrated_PC <- apply(fit_count_integrated_PC,1,mean)
-  phat_integrated_PC <- apply(fit_presence_integrated_PC,1,mean)
-  
-  AUC_integrated_PC = auc(PC_xval_df$presence, phat_integrated_PC) %>% as.numeric()
-  MSE_integrated_PC = mean(( PC_xval_df$count - yhat_integrated_PC)^2)
-  MAE_integrated_PC = mean(abs( PC_xval_df$count - yhat_integrated_PC))
-  cor_integrated_PC = cor( PC_xval_df$count, yhat_integrated_PC) %>% as.numeric()
-  logLik_integrated_PC <- sum(log(dpois(PC_xval_df$count,yhat_integrated_PC)))
-  
-  # Crossvalidation for checklist data
-  pred_integrated_CL <- generate(fit_integrated, 
-                                 CL_xval, 
-                                 formula = ~ Intercept_CL + spde_coarse + CL_effort,
-                                 n.samples = 500)
-  
-  fit_count_integrated_CL = exp(pred_integrated_CL)
-  fit_presence_integrated_CL = 1-exp(-fit_count_integrated_CL)
-  yhat_integrated_CL <- apply(fit_count_integrated_CL,1,mean)
-  phat_integrated_CL <- apply(fit_presence_integrated_CL,1,mean)
-  
-  AUC_integrated_CL = auc(CL_xval_df$presence, phat_integrated_CL) %>% as.numeric()
-  MSE_integrated_CL = mean(( CL_xval_df$count - yhat_integrated_CL)^2)
-  MAE_integrated_CL = mean(abs( CL_xval_df$count - yhat_integrated_CL))
-  cor_integrated_CL = cor( CL_xval_df$count, yhat_integrated_CL) %>% as.numeric()
-  logLik_integrated_CL <- sum(log(dbinom(x = CL_xval_df$presence, size = rep(1,nrow(CL_xval_df)), prob = phat_integrated_CL)))
-  
-  # Compare crossvalidation metrics
-  xval_df <- rbind(xval_df,
-                   data.frame(sp_code = sp_code,
-                              
-                              # Crossvalidation metrics on withheld PC data
-                              # (compare model fit to PC only, versus integrated)
-                              AUC_PConly = AUC_PConly,
-                              AUC_integrated_PC = AUC_integrated_PC,
-                              
-                              cor_PConly = cor_PConly,
-                              cor_integrated_PC = cor_integrated_PC,
-                              
-                              logLik_PConly = logLik_PConly,
-                              logLik_integrated_PC = logLik_integrated_PC,
-                              
-                              # Crossvalidation metrics on withheld CL data
-                              # (compare model fit to CL only, versus integrated)
-                              AUC_CLonly = AUC_CLonly,
-                              AUC_integrated_CL = AUC_integrated_CL,
-                              
-                              cor_CLonly = cor_CLonly,
-                              cor_integrated_CL = cor_integrated_CL,
-                              
-                              logLik_CLonly = logLik_CLonly,
-                              logLik_integrated_CL = logLik_integrated_CL
-                              
-                              )
-                   )
-  
-  print(sp_code)
-  
-  save(xval_df, file = "../AOS_precision/output/xval_df_integrated.RData")
-  
-} # close species loop
 
+if (file.exists("../AOS_precision/output/xval_df_integrated.RData")){
+  load("../AOS_precision/output/xval_df_integrated.RData")
+}
+
+xval_df[xval_df == -Inf] <- NA
+xval_df <- na.omit(xval_df)
+xval_df <- left_join(xval_df,species_to_fit)
+xval_df <- xval_df %>% arrange(proportion_PC)
+
+xval_df$Species <- factor(xval_df$Species, levels = xval_df$Species)
 
 # --------------------------------
 # Compare crossvalidation accuracy
@@ -567,6 +656,16 @@ hist(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
 mean(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
 mean((xval_df$logLik_integrated_PC - xval_df$logLik_PConly)>0)
 median(xval_df$logLik_integrated_PC - xval_df$logLik_PConly)
+
+ggplot(xval_df, aes(x = proportion_PC, y = (logLik_integrated_PC - logLik_PConly), label = Species))+
+  geom_point()+
+  geom_text_repel()+
+  theme_bw()
+
+ggplot(xval_df, aes(x = proportion_PC, y = (cor_integrated_PC - cor_PConly), label = sp_code))+
+  geom_point()+
+  geom_text_repel()+
+  theme_bw()
 
 # Does integrated model improve log likelihood of withheld checklists?
 hist(xval_df$logLik_integrated_CL - xval_df$logLik_CLonly)
