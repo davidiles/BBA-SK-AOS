@@ -447,7 +447,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                       like_PC,
                       options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
                                      bru_verbose = 4,
-                                     bru_max_iter = 10,
+                                     bru_max_iter = 20,
                                      bru_initial = inits))
     
     # fit_CLonly <- bru(components = model_components, 
@@ -461,7 +461,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                           like_PC,like_CL,
                           options = list(control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
                                          bru_verbose = 4,
-                                         bru_max_iter = 10,
+                                         bru_max_iter = 20,
                                          bru_initial = inits))
     
     end <- Sys.time()
