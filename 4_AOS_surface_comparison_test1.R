@@ -387,7 +387,7 @@ covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 #for (sp_code in species_to_fit$Species){
 #for (sp_code in c("ROPI","SWHA")){
 
-sp_code = "ROPI"
+sp_code = "SWHA"
 
 # if (file.exists("../AOS_precision/output/surface_comparison_test1.RData")){
 #   load("../AOS_precision/output/surface_comparison_test1.RData")
@@ -728,7 +728,7 @@ pred_surface_PConly <- generate(fit_PConly,
 # end = Sys.time()
 
 # Add lognormal variance correction
-pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
+pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4])
 
 # Add lognormal variance correction
 #pred_surface_integrated <- pred_surface_integrated #* exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_shared",4]) # * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_PC",4]) 
