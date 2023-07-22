@@ -370,8 +370,8 @@ Water_centroids <- SaskGrid %>%
   st_intersection(.,SaskWater)
 
 surface_comparison <- data.frame()
-if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-  load("../AOS_precision/output/surface_comparison_RE.RData")
+if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
+  load("../AOS_precision/output/surface_comparison_RE_effort.RData")
 }
 
 # covariates to include in models
@@ -379,8 +379,8 @@ covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
 for (sp_code in species_to_fit$Species){
 
-  if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-    load("../AOS_precision/output/surface_comparison_RE.RData")
+  if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
+    load("../AOS_precision/output/surface_comparison_RE_effort.RData")
   }
   
   # Check if this species/xval fold have already been run. If so, skip
@@ -501,11 +501,11 @@ for (sp_code in species_to_fit$Species){
   # Create 'temporal mesh' to model effect of checklist duration
   # --------------------------------
   # 
-  # SC_duration_meshpoints <- seq(0,max(SC_sf$DurationInHours)+0.1,length.out = 11)
-  # SC_duration_mesh1D = inla.mesh.1d(SC_duration_meshpoints,boundary="free")
-  # SC_duration_spde = inla.spde2.pcmatern(SC_duration_mesh1D,
-  #                                        prior.range = c(1,0.9), # 90% chance range is smaller than 1
-  #                                        prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
+  SC_duration_meshpoints <- seq(0,max(SC_sf$DurationInHours)+0.1,length.out = 11)
+  SC_duration_mesh1D = inla.mesh.1d(SC_duration_meshpoints,boundary="free")
+  SC_duration_spde = inla.spde2.pcmatern(SC_duration_mesh1D,
+                                         prior.range = c(1,0.9), # 90% chance range is smaller than 1
+                                         prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
   # 
   # LT_duration_meshpoints <- seq(0,max(LT_sf$DurationInHours)+0.1,length.out = 11)
   # LT_duration_mesh1D = inla.mesh.1d(LT_duration_meshpoints,boundary="free")
@@ -534,7 +534,7 @@ for (sp_code in species_to_fit$Species){
   
   covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
   
-  # SC_effort(main = DurationInHours,model = SC_duration_spde) +
+  
   # LT_effort(main = DurationInHours,model = LT_duration_spde) +
   # BBA_effort(main = DurationInHours,model = BBA_duration_spde) +
   #Intercept_LT(1)+
@@ -547,9 +547,8 @@ for (sp_code in species_to_fit$Species){
   
   kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
   kappa_SC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-
   kappa_shared(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-
+  SC_effort(main = DurationInHours,model = SC_duration_spde) +
   spde_coarse(main = coordinates, model = matern_coarse) + 
   ',
                                        
@@ -589,6 +588,7 @@ for (sp_code in species_to_fit$Species){
                   spde_coarse +
                   kappa_SC +
                   kappa_shared +
+                  SC_effort +
                                        ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                        " + ",
@@ -658,7 +658,7 @@ for (sp_code in species_to_fit$Species){
                     options = list(
                       control.inla = list(int.strategy = "eb"),
                       bru_verbose = 4,
-                      bru_max_iter = 5,
+                      bru_max_iter = 25,
                       bru_initial = inits)) 
   
   fit_integrated <- bru(components = model_components, 
@@ -666,7 +666,7 @@ for (sp_code in species_to_fit$Species){
                         options = list(#control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
                           control.inla = list(int.strategy = "eb"),
                           bru_verbose = 4,
-                          bru_max_iter = 5,
+                          bru_max_iter = 25,
                           bru_initial = inits))
   
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -791,7 +791,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_PConly_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -825,7 +825,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_integrated_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -877,7 +877,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_PConly_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -912,7 +912,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_integrated_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -938,8 +938,8 @@ for (sp_code in species_to_fit$Species){
   # Save results
   # -------------------------------------------------------
   
-  if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-    load("../AOS_precision/output/surface_comparison_RE.RData")
+  if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
+    load("../AOS_precision/output/surface_comparison_RE_effort.RData")
   }
   
   surface_comparison <- rbind(surface_comparison,
@@ -955,7 +955,7 @@ for (sp_code in species_to_fit$Species){
   
   print(paste(sp_code," ... ",round(runtime_mins),"mins"))
   
-  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_RE.RData")
+  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_RE_effort.RData")
   
   rm(list = c("pred_grid_sp","pred_surface_integrated","pred_surface_PConly","fit_integrated","fit_PConly","raster_pred_surface_PConly","raster_pred_surface_integrated"))
   

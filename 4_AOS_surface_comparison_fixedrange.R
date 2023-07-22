@@ -370,17 +370,17 @@ Water_centroids <- SaskGrid %>%
   st_intersection(.,SaskWater)
 
 surface_comparison <- data.frame()
-if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-  load("../AOS_precision/output/surface_comparison_RE.RData")
+if (file.exists("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")){
+  load("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")
 }
 
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
-for (sp_code in species_to_fit$Species){
-
-  if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-    load("../AOS_precision/output/surface_comparison_RE.RData")
+#for (sp_code in species_to_fit$Species){
+for (sp_code in c("ROPI","SWHA")){
+  if (file.exists("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")){
+    load("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")
   }
   
   # Check if this species/xval fold have already been run. If so, skip
@@ -486,7 +486,8 @@ for (sp_code in species_to_fit$Species){
   #plot(mesh_spatial)
   
   matern_coarse <- inla.spde2.pcmatern(mesh_spatial,
-                                       prior.range = c(max.edge*5, 0.1), # 10% chance range is smaller than 500000
+                                       #prior.range = c(max.edge*5, 0.1), # 10% chance range is smaller than 500000
+                                       prior.range = c(max.edge*5,NA), # 10% chance range is smaller than 500000
                                        prior.sigma = c(1, 0.1)      # 10% chance sd is larger than 1
   )                # sum to 1 constraint
   
@@ -541,15 +542,16 @@ for (sp_code in species_to_fit$Species){
   #Intercept_BBA(1)+
   #kappa_BBA(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
   
+  # 
+  #kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  #  kappa_SC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+    
+  #  kappa_shared(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+    
   model_components = as.formula(paste0('~
   Intercept_PC(1)+
   Intercept_SC(1)+
-  
-  kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_SC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-
   kappa_shared(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-
   spde_coarse(main = coordinates, model = matern_coarse) + 
   ',
                                        
@@ -566,8 +568,8 @@ for (sp_code in species_to_fit$Species){
   
   model_formula_PConly = as.formula(paste0('count ~
                   Intercept_PC +
-                  kappa_PC +
                   spde_coarse +
+                  kappa_shared +
                    ',
                                            paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                            " + ",
@@ -576,7 +578,6 @@ for (sp_code in species_to_fit$Species){
   model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
                   spde_coarse +
-                  kappa_PC +
                   kappa_shared +
                    ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
@@ -587,7 +588,6 @@ for (sp_code in species_to_fit$Species){
 
                   Intercept_SC +
                   spde_coarse +
-                  kappa_SC +
                   kappa_shared +
                                        ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
@@ -653,20 +653,20 @@ for (sp_code in species_to_fit$Species){
   
   start <- Sys.time()
   
-  fit_PConly <- bru(components = model_components,
-                    like_PConly,
-                    options = list(
-                      control.inla = list(int.strategy = "eb"),
-                      bru_verbose = 4,
-                      bru_max_iter = 5,
-                      bru_initial = inits)) 
+  # fit_PConly <- bru(components = model_components,
+  #                   like_PConly,
+  #                   options = list(
+  #                     control.inla = list(int.strategy = "eb"),
+  #                     bru_verbose = 4,
+  #                     bru_max_iter = 10,
+  #                     bru_initial = inits)) 
   
   fit_integrated <- bru(components = model_components, 
-                        like_PC,like_SC,#like_LT,like_BBA,
+                        like_PC,like_SC,
                         options = list(#control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
                           control.inla = list(int.strategy = "eb"),
                           bru_verbose = 4,
-                          bru_max_iter = 5,
+                          bru_max_iter = 10,
                           bru_initial = inits))
   
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -690,13 +690,13 @@ for (sp_code in species_to_fit$Species){
   # ********
   
   nsamp = 100
-  pred_surface_PConly <- generate(fit_PConly,
-                                  as(SaskGrid,'Spatial'),
-                                  formula =  pred_formula_PC,
-                                  n.samples = nsamp) %>%
-    apply(.,1,median) %>%
-    exp()
-  
+  # pred_surface_PConly <- generate(fit_PConly,
+  #                                 as(SaskGrid,'Spatial'),
+  #                                 formula =  pred_formula_PC,
+  #                                 n.samples = nsamp) %>%
+  #   apply(.,1,median) %>%
+  #   exp()
+  # 
   pred_surface_integrated <- generate(fit_integrated,
                                       as(SaskGrid,'Spatial'),
                                       formula =  pred_formula_PC,
@@ -706,10 +706,10 @@ for (sp_code in species_to_fit$Species){
   end = Sys.time()
   
   # Add lognormal variance correction
-  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_PC",4])
+  #pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_PC",4])
   
   # Add lognormal variance correction
-  pred_surface_integrated <- pred_surface_integrated * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_PC",4]) * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_shared",4])
+  pred_surface_integrated <- pred_surface_integrated * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_shared",4]) # * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_PC",4]) 
   
   #rm(list = c("fit_integrated","fit_PConly"))
   
@@ -791,7 +791,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_PConly_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly_fixedrange.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -825,7 +825,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_integrated_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated_fixedrange.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -877,7 +877,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_PConly_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly_fixedrange.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -912,7 +912,7 @@ for (sp_code in species_to_fit$Species){
   
   #print(pred_surface_map_integrated_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated_fixedrange.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -938,8 +938,8 @@ for (sp_code in species_to_fit$Species){
   # Save results
   # -------------------------------------------------------
   
-  if (file.exists("../AOS_precision/output/surface_comparison_RE.RData")){
-    load("../AOS_precision/output/surface_comparison_RE.RData")
+  if (file.exists("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")){
+    load("../AOS_precision/output/surface_comparison_RE_fixedrange.RData")
   }
   
   surface_comparison <- rbind(surface_comparison,
@@ -955,7 +955,7 @@ for (sp_code in species_to_fit$Species){
   
   print(paste(sp_code," ... ",round(runtime_mins),"mins"))
   
-  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_RE.RData")
+  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_RE_fixedrange.RData")
   
   rm(list = c("pred_grid_sp","pred_surface_integrated","pred_surface_PConly","fit_integrated","fit_PConly","raster_pred_surface_PConly","raster_pred_surface_integrated"))
   

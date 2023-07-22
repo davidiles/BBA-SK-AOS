@@ -43,7 +43,7 @@ rm(list=ls())
 setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
-load("../AOS_precision/output/xval_df_integrated_20km.RData")
+load("../AOS_precision/output/xval_df_integrated.RData")
 
 xval_df <- xval_df %>%
   group_by(Species) %>%
@@ -101,7 +101,7 @@ ggplot()+
 # Examine results across each cross-validation fold
 # -----------------------------------------------------------
 
-load("../AOS_precision/output/xval_df_integrated_20km.RData")
+load("../AOS_precision/output/xval_df_integrated.RData")
 
 xval_df$n_obs_CL <- xval_df$n_obs_SC + xval_df$n_obs_LT + xval_df$n_obs_BBA
 xval_df$delta_cor <- xval_df$cor_integrated - xval_df$cor_PConly
@@ -109,7 +109,7 @@ xval_df$delta_MSE <- xval_df$MSE_integrated - xval_df$MSE_PConly
 xval_df$delta_AUC <- xval_df$AUC_integrated - xval_df$AUC_PConly
 
 ggplot()+
- geom_segment(data = xval_df, aes(x = xval_fold,xend = xval_fold, 
+  geom_segment(data = xval_df, aes(x = xval_fold,xend = xval_fold, 
                                    y = (cor_PConly ),yend = cor_integrated, col = delta_cor > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -153,60 +153,194 @@ load(file = "../AOS_precision/output/surface_comparison_100km.RData")
 surface_comparison
 
 #ggplot(surface_comparison, aes())+
+
+
+
+# *******************************************************************
+# *******************************************************************
+# Figures for AOS
+# *******************************************************************
+# *******************************************************************
+
+
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
+`%!in%` <- Negate(`%in%`)
+
+# Load squares to withhold for crossvalidation
+SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval_20km.shp") %>%
+  st_transform(crs(PC_surveyinfo))
+SaskSquares$sq_idx <- as.numeric(factor(SaskSquares$SQUARE_ID))
+SaskSquares_centroids <- st_centroid(SaskSquares)
+
+
+load("!Data_processed/SaskGrid_PCA.RData")
+SaskPoints <- st_centroid(SaskGrid) %>% dplyr::select(pointid)
+SaskPoints$y <- st_coordinates(SaskPoints)[,2]
+SaskPoints$x <- st_coordinates(SaskPoints)[,1]
+
+SaskBoundary <- read_sf("!Shapefiles/SaskBoundary/SaskBoundary_Project.shp")
+
+SaskWater <- read_sf("!Shapefiles/Water/SaskWaterClip.shp") %>%
+  st_transform(crs = st_crs(SaskBoundary))
+SaskWater$area <- st_area(SaskWater) %>% as.numeric()
+SaskWater <- SaskWater[SaskWater$area>2.580e+06 ,]
+
+# --------------------------------
+# Load Point count data
+# --------------------------------
+
+# Pointcount_dataset: locations and covariates associated with each point count
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
+
+# Covariates / spatial locations of each point count survey
+PC_surveyinfo <- Pointcount_data$PC_surveyinfo
+
+# Counts associated with each point count survey
+PC_matrix <- Pointcount_data$PC_matrix
+
+# ******
+# Selection criteria for point counts to use in analysis
+# *********
+PC_to_use <- which(PC_surveyinfo$DurationInMinutes %in% c(3,5,10)) # Time of day, day of year????
+PC_surveyinfo <- PC_surveyinfo[PC_to_use,]
+PC_matrix <- PC_matrix[PC_to_use,]
+
+rm(Pointcount_data)
+
+# --------------------------------
+# Load Checklist data
+# --------------------------------
+
+# Pointcount_dataset: locations and covariates associated with each point count
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
+
+# Covariates / spatial locations of each checklist survey (daily observations)
+DO_surveyinfo <- Checklist_data$DO_surveyinfo
+
+# Counts associated with each checklist survey
+DO_matrix <- Checklist_data$DO_matrix
+
+# --------------------------------
+# Prepare to plot
+# --------------------------------
+PC_sf <- PC_surveyinfo
+CL_sf <- DO_surveyinfo
+
+# Stationary counts
+SC_sf <- subset(CL_sf, ProtocolType == "Stationary count" & DurationInHours <= 1)
+
+# Linear transects (travel distance included)
+LT_sf <- subset(CL_sf, ProtocolType == "Linear transect" & 
+                  TravelDistance_m <= 5000 & 
+                  DurationInHours > 0 &
+                  DurationInHours <= 1)
+
+# Breeding Bird Atlas (travel distance mostly missing)
+BBA_sf <- subset(CL_sf, ProtocolType == "Breeding Bird Atlas" &
+                   DurationInHours > 0 &
+                   DurationInHours <= 1)
+
+CL_sf2 <- rbind(SC_sf,LT_sf,BBA_sf)
+
+
+# ---------------------------------------------
+# Summarize data on a square-by-square level
+# ---------------------------------------------
+
+SaskSquares <- SaskSquares %>% dplyr::rename(sq_id = SQUARE_ID)
+
+# Summary of point count information in each square
+PC_summary <- PC_sf %>%
+  as.data.frame() %>%
+  group_by(sq_id) %>%
+  summarize(n_PC = n())
+
+# Summary of checklist information in each square
+CL_summary <- CL_sf2 %>%
+  as.data.frame() %>%
+  group_by(sq_id) %>%
+  summarize(n_CL = n(),
+            n_SC = sum(ProtocolType == "Stationary count"),
+            n_LT = sum(ProtocolType == "Linear transect"),
+            n_BBA = sum(ProtocolType == "Breeding Bird Atlas"))
+
+SaskSquares_n <- SaskSquares %>% 
+  left_join(PC_summary) %>%
+  left_join(CL_summary) %>%
+  dplyr::select(sq_id,n_PC,n_CL,n_SC,n_LT,n_BBA,geometry)%>%
+  rowwise() %>% 
+  mutate(PC_CL = sum(n_PC,n_CL,na.rm=TRUE))
+
+SaskSquares_n_centroids <- st_centroid(SaskSquares_n)
+
+map_PC <- ggplot() +
+  geom_sf(data = SaskBoundary,colour="black",fill="#f2f2f2",lwd=0.3,show.legend = F) +
   
+  geom_sf(data = SaskWater,colour=NA,fill="#59F3F3",show.legend = F)+
+  geom_sf(data = SaskBoundary,colour="black",fill=NA,lwd=0.3,show.legend = F)+
+  
+  # Plot point count locations
+  geom_sf(data = subset(SaskSquares_n_centroids,n_PC > 0 & !is.na(n_PC)),pch=19, size=0.1,show.legend = F, col = "black")+
+  
+  coord_sf(clip = "off",xlim = c(min(SaskPoints$x), max(SaskPoints$x)))+
+  theme(panel.background = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())+
+  theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))+
+  theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
+        legend.title = element_markdown(lineheight=.9,hjust = "left"))
 
+png(paste0("../AOS_precision/output/figures/map_PC.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+print(map_PC)
+dev.off()
 
-# # -----------------------------------------------------------
-# # Compare "Two Step" analysis with fully integrated analysis
-# # -----------------------------------------------------------
-# 
-# rm(list=ls())
-# load("../AOS_precision/output/xval_df_integrated_100km_noRE.RData")
-# xval_df_integrated <- xval_df
-# 
-# load("../AOS_precision/output/xval_df_integrated_100km_TwoStep.RData")
-# xval_df_TwoStep <- xval_df
-# 
-# xval_comparison <- full_join(xval_df_integrated[,c("Species","xval_fold","AUC_integrated","cor_integrated","MSE_integrated")],xval_df_TwoStep)
-# xval_comparison$delta_cor <- xval_comparison$cor_integrated - xval_comparison$cor_TwoStep
-# xval_comparison$delta_MSE <- xval_comparison$MSE_integrated - xval_comparison$MSE_TwoStep
-# xval_comparison$delta_AUC <- xval_comparison$AUC_integrated - xval_comparison$AUC_TwoStep
-# 
-# xval_comparison[,c("Species","xval_fold","cor_integrated","cor_TwoStep","AUC_integrated","AUC_TwoStep","MSE_integrated","MSE_TwoStep")] %>% na.omit()
-# 
-# ggplot()+
-#   geom_segment(data = xval_comparison, aes(x = xval_fold,xend = xval_fold, 
-#                                    y = cor_TwoStep,yend = cor_integrated, col = delta_cor > 0),
-#                size = 2,
-#                arrow = arrow(length = unit(0.05, "inches")))+
-#   scale_color_manual(values=c("red","blue"), name = "Change in cor",
-#                      labels = c("Decrease","Increase"), guide = "none")+
-#   scale_x_continuous(name = "Crossval fold")+
-#   ylab("Correlation\n(Crossvalidation)")+
-#   theme_bw()+
-#   facet_wrap(Species~.)
-# 
-# ggplot()+
-#   geom_segment(data = xval_comparison, aes(x = xval_fold,xend = xval_fold, 
-#                                            y = AUC_TwoStep,yend = AUC_integrated, col = delta_AUC > 0),
-#                size = 2,
-#                arrow = arrow(length = unit(0.05, "inches")))+
-#   scale_color_manual(values=c("red","blue"), name = "Change in AUC",
-#                      labels = c("Decrease","Increase"), guide = "none")+
-#   scale_x_continuous(name = "Crossval fold")+
-#   ylab("AUC\n(Crossvalidation)")+
-#   theme_bw()+
-#   facet_wrap(Species~.)
-# 
-# ggplot()+
-#   geom_segment(data = xval_comparison, aes(x = xval_fold,xend = xval_fold, 
-#                                            y = MSE_TwoStep,yend = MSE_integrated, col = delta_MSE > 0),
-#                size = 2,
-#                arrow = arrow(length = unit(0.05, "inches")))+
-#   scale_color_manual(values=c("blue","red"), name = "Change in MSE",
-#                      labels = c("Decrease","Increase"), guide = "none")+
-#   scale_x_continuous(name = "Crossval fold")+
-#   ylab("MSE\n(Crossvalidation)")+
-#   theme_bw()+
-#   facet_wrap(Species~.)
+map_PC_SC <- ggplot() +
+  geom_sf(data = SaskBoundary,colour="black",fill="#f2f2f2",lwd=0.3,show.legend = F) +
+  
+  geom_sf(data = SaskWater,colour=NA,fill="#59F3F3",show.legend = F)+
+  geom_sf(data = SaskBoundary,colour="black",fill=NA,lwd=0.3,show.legend = F)+
+  
+  # Plot point count locations
+  geom_sf(data = subset(SaskSquares_n_centroids,n_PC > 0 & !is.na(n_PC)),pch=19, size=0.1,show.legend = F, col = "black")+
+  
+  # Plot black circles where SC checklists were collected
+  geom_sf(data = subset(SaskSquares_n_centroids,n_SC > 0 & !is.na(n_SC)),pch=1, size=1,show.legend = F, col = "black")+
+  
+  coord_sf(clip = "off",xlim = c(min(SaskPoints$x), max(SaskPoints$x)))+
+  theme(panel.background = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())+
+  theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))+
+  theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
+        legend.title = element_markdown(lineheight=.9,hjust = "left"))
 
+png(paste0("../AOS_precision/output/figures/map_PC_SC.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+print(map_PC_SC)
+dev.off()
+
+map_PC_SC_LT <- ggplot() +
+  geom_sf(data = SaskBoundary,colour="black",fill="#f2f2f2",lwd=0.3,show.legend = F) +
+  
+  geom_sf(data = SaskWater,colour=NA,fill="#59F3F3",show.legend = F)+
+  geom_sf(data = SaskBoundary,colour="black",fill=NA,lwd=0.3,show.legend = F)+
+  
+  # Plot point count locations
+  geom_sf(data = subset(SaskSquares_n_centroids,n_PC > 0 & !is.na(n_PC)),pch=19, size=0.1,show.legend = F, col = "black")+
+  
+  # Plot black circles where SC checklists were collected
+  geom_sf(data = subset(SaskSquares_n_centroids,n_SC > 0 & !is.na(n_SC)),pch=1, size=1,show.legend = F, col = "black")+
+  
+  # Plot red diamonds where LT checklists were collected
+  geom_sf(data = subset(SaskSquares_n_centroids,n_LT > 0 & !is.na(n_LT)),pch=5, size=1,show.legend = F, col = "red")+
+  
+  coord_sf(clip = "off",xlim = c(min(SaskPoints$x), max(SaskPoints$x)))+
+  theme(panel.background = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  theme(axis.title.y=element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank())+
+  theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))+
+  theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
+        legend.title = element_markdown(lineheight=.9,hjust = "left"))
+
+png(paste0("../AOS_precision/output/figures/map_PC_SC_LT.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+print(map_PC_SC_LT)
+dev.off()

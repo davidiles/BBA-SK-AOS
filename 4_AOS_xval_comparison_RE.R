@@ -33,7 +33,7 @@ library(napops) # For detectability offsets  # devtools::install_github("na-pops
 rm(list=ls())
 
 # Import rasters, data, and covariates from "standard analysis"
-setwd("C:/Users/ilesd/Desktop/SK_BBA_analysis/Standard_Analysis/")
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
 # **************************************************************************************
@@ -126,7 +126,7 @@ SaskBoundary <- read_sf("!Shapefiles/SaskBoundary/SaskBoundary_Project.shp")
 # --------------------------------
 
 # Pointcount_dataset: locations and covariates associated with each point count
-load("C:/Users/ilesd/Desktop/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
 
 # Covariates / spatial locations of each point count survey
 PC_surveyinfo <- Pointcount_data$PC_surveyinfo
@@ -148,7 +148,7 @@ rm(Pointcount_data)
 # --------------------------------
 
 # Pointcount_dataset: locations and covariates associated with each point count
-load("C:/Users/ilesd/Desktop/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
 
 # Covariates / spatial locations of each checklist survey (daily observations)
 DO_surveyinfo <- Checklist_data$DO_surveyinfo
@@ -465,10 +465,6 @@ for (sp_code in rev(species_to_fit$Species)){
     
     # Point counts
     kappa_prec <- list(prior = "pcprec", param = c(1,0.1))
-
-    # Linear transects
-    #kappa_CL_prec <- list(prior = "pcprec", param = c(1,0.1))
-    #CL_sp$sq_idx <- as.numeric(factor(CL_sp$sq_id))
     
     # --------------------------------
     # Create 'temporal mesh' to model effect of checklist duration
@@ -510,14 +506,18 @@ for (sp_code in rev(species_to_fit$Species)){
     # SC_effort(main = DurationInHours,model = SC_duration_spde) +
     # LT_effort(main = DurationInHours,model = LT_duration_spde) +
     # BBA_effort(main = DurationInHours,model = BBA_duration_spde) +
+    #Intercept_LT(1)+
+    #Intercept_BBA(1)+
+    #kappa_BBA(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
     
     model_components = as.formula(paste0('~
   Intercept_PC(1)+
   Intercept_SC(1)+
-  Intercept_LT(1)+
-  Intercept_BBA(1)+
   
-  kappa_RE(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_SC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+
+  kappa_shared(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
 
   spde_coarse(main = coordinates, model = matern_coarse) + 
   ',
@@ -533,10 +533,20 @@ for (sp_code in rev(species_to_fit$Species)){
     # Model formulas
     # --------------------------------
     
+    model_formula_PConly = as.formula(paste0('count ~
+                  Intercept_PC +
+                  kappa_PC +
+                  spde_coarse +
+                   ',
+                                             paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+                                             " + ",
+                                             paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
+    
     model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
                   spde_coarse +
-                  kappa_RE +
+                  kappa_PC +
+                  kappa_shared +
                    ',
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
@@ -546,7 +556,8 @@ for (sp_code in rev(species_to_fit$Species)){
 
                   Intercept_SC +
                   spde_coarse +
-                  kappa_RE +
+                  kappa_SC +
+                  kappa_shared +
                                        ',
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
@@ -557,7 +568,7 @@ for (sp_code in rev(species_to_fit$Species)){
 
                   Intercept_LT +
                   spde_coarse +
-                  kappa_RE +
+                  kappa_shared +
                                        ',
                                          paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                          " + ",
@@ -568,7 +579,7 @@ for (sp_code in rev(species_to_fit$Species)){
 
                   Intercept_BBA +
                   spde_coarse +
-                  kappa_RE +
+                  kappa_shared +
                                        ',
                                           paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                           " + ",
@@ -578,7 +589,9 @@ for (sp_code in rev(species_to_fit$Species)){
     # --------------------------------
     # Specify model likelihoods
     # --------------------------------
-    
+    like_PConly <- like(family = "poisson",
+                        formula = model_formula_PConly,
+                        data = PC_sp)
     like_PC <- like(family = "poisson",
                     formula = model_formula_PC,
                     data = PC_sp)
@@ -596,29 +609,35 @@ for (sp_code in rev(species_to_fit$Species)){
     # Select reasonable initial values (should not affect inference, but affects model convergence)
     # --------------------------------
     
-    inits <- c(-5,-5,-5,-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
-    names(inits) <- c("Intercept_PC","Intercept_SC","Intercept_LT","Intercept_BBA",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
+    inits <- c(-5,-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
+    #,"Intercept_LT","Intercept_BBA"
+    names(inits) <- c("Intercept_PC","Intercept_SC",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
     
     # --------------------------------
     # Fit models
     # --------------------------------
     
+    #bru_options_set(inla.mode = "experimental")
+    #bru_options_reset()
+    
     start <- Sys.time()
     
     fit_PConly <- bru(components = model_components,
-                      like_PC,
-                      options = list(#control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                                     bru_verbose = 4,
-                                     bru_max_iter = 5,
-                                     bru_initial = inits))
+                      like_PConly,
+                      options = list(
+                        control.inla = list(int.strategy = "eb"),
+                        bru_verbose = 4,
+                        bru_max_iter = 5,
+                        bru_initial = inits)) 
     
     fit_integrated <- bru(components = model_components, 
-                          like_PC,like_SC,like_LT,like_BBA,
+                          like_PC,like_SC,#like_LT,like_BBA,
                           options = list(#control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                                         bru_verbose = 4,
-                                         bru_max_iter = 5,
-                                         bru_initial = inits))
-
+                            control.inla = list(int.strategy = "eb"),
+                            bru_verbose = 4,
+                            bru_max_iter = 5,
+                            bru_initial = inits))
+    
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     # Cross-validation on withheld data
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -755,12 +774,12 @@ for (sp_code in rev(species_to_fit$Species)){
                      )
     )
     
-    print(paste(sp_code," fold ",fold," ... ",round(runtime)," mins"))
+    print(paste(sp_code," fold ",fold," ... ",round(runtime_mins), "mins"))
     
     save(xval_df, file = "../AOS_precision/output/xval_df_integrated_RE.RData")
     
     rm(list = c("pred_integrated","pred_PConly","fit_PConly","fit_integrated"))
     
   } # close species loop
-} # xval fold
+#} # xval fold
 
