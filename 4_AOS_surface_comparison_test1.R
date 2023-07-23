@@ -385,19 +385,18 @@ if (file.exists("../AOS_precision/output/surface_comparison_test1.RData")){
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
-for (sp_code in species_to_fit$Species){
+for (sp_code in rev(species_to_fit$Species)){
   
-  #if (file.exists(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly_test1.png"))) next
-  
-  # if (file.exists("../AOS_precision/output/surface_comparison_test1.RData")){
-  #   load("../AOS_precision/output/surface_comparison_test1.RData")
-  # }
-  # 
-  # # Check if this species/xval fold have already been run. If so, skip
-  # if (nrow(surface_comparison)>0){
-  #   if (nrow(subset(surface_comparison,Species == sp_code))>0) next
-  # }
-  
+
+  if (file.exists("../AOS_precision/output/surface_comparison_test1.RData")){
+    load("../AOS_precision/output/surface_comparison_test1.RData")
+  }
+
+  # Check if this species/xval fold have already been run. If so, skip
+  if (nrow(surface_comparison)>0){
+    if (nrow(subset(surface_comparison,Species == sp_code))>0) next
+  }
+
   print(sp_code)
   
   # --------------------------------
@@ -948,11 +947,12 @@ for (sp_code in species_to_fit$Species){
                                          core_PConly = core_PConly,
                                          core_integrated = core_integrated,
                                          correlation_between_surfaces = correlation_between_surfaces,
-                                         runtime_mins = round(as.numeric(runtime_mins))
+                                         runtime_PConly = runtime_PConly,
+                                         runtime_integrated = runtime_integrated
                               ))
   
   
-  print(paste(sp_code," ... ",round(runtime_mins),"mins"))
+  #print(paste(sp_code," ... ",round(runtime_mins),"mins"))
   
   save(surface_comparison, file = "../AOS_precision/output/surface_comparison_test1.RData")
   
