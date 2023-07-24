@@ -528,7 +528,7 @@ for (sp_code in species_to_fit$Species){
   # --------------------------------
   
   kappa_prec <- list(prior = "pcprec", param = c(1,0.1))
-  
+
   # --------------------------------
   # Create mesh to model effect of checklist duration
   # --------------------------------
@@ -562,15 +562,17 @@ for (sp_code in species_to_fit$Species){
   # BBA_effort(main = DurationInHours,model = BBA_duration_spde) +
   #Intercept_LT(1)+
   #Intercept_BBA(1)+
-  # kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-    
+  # 
+  #SC_effort(main = DurationInHours,model = SC_duration_spde) +
   model_components = as.formula(paste0('~
-  Intercept_PC(1,model="linear", mean.linear = log(0.01), prec.linear = 0.25)+
+  Intercept_PC(1)+
   Intercept_SC(1)+
   kappa_surveyID(surveyID, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
   spde_coarse(main = coordinates, model = matern_coarse) +
   
-  SC_effort(main = DurationInHours,model = SC_duration_spde) +
+  
   ',
                                        
                                        paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
@@ -581,30 +583,22 @@ for (sp_code in species_to_fit$Species){
   # --------------------------------
   # Model formulas
   # --------------------------------
-  #kappa_squareday +
-  model_formula_PConly = as.formula(paste0('count ~
-                  Intercept_PC +
-                  kappa_surveyID +
-                  
-                  spde_coarse +
-                   ',
-                                           paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
-  
-  #kappa_squareday +
+
   model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
                   kappa_surveyID +
-                  
+                  kappa_squareID +
+                  kappa_squareday +
                   spde_coarse +
                    ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
   
-  # kappa_squareday +
+  #SC_effort +
   model_formula_SC = as.formula(paste0('presence ~ log(1/exp(-exp(
 
                   Intercept_SC +
-                  
-                  SC_effort +
+                  kappa_squareID +
+                  kappa_squareday +
                   spde_coarse +
                                        ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
@@ -625,13 +619,12 @@ for (sp_code in species_to_fit$Species){
   #                                      ',
   #                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
   #                                       "))-1)"))
-  # 
+  #
+  
   # --------------------------------
   # Specify model likelihoods
   # --------------------------------
-  like_PConly <- like(family = "poisson",
-                      formula = model_formula_PConly,
-                      data = PC_sp)
+  
   like_PC <- like(family = "poisson",
                   formula = model_formula_PC,
                   data = PC_sp)
@@ -657,16 +650,16 @@ for (sp_code in species_to_fit$Species){
   # Fit models
   # --------------------------------
   
-  #bru_options_set(inla.mode = "experimental")
+  bru_options_set(inla.mode = "experimental")
   bru_options_reset()
   
   start <- Sys.time()
   fit_PConly <- bru(components = model_components,
-                    like_PConly,
+                    like_PC,
                     options = list(
                       #control.inla = list(int.strategy = "eb"),
                       bru_verbose = 4,
-                      bru_max_iter = 10,
+                      bru_max_iter = 5,
                       bru_initial = inits))
   end <- Sys.time()
   runtime_PConly <- difftime( end,start, units="mins")
@@ -675,12 +668,12 @@ for (sp_code in species_to_fit$Species){
   fit_integrated <- bru(components = model_components,
                         like_PC,like_SC,
                         options = list(
-                          #control.inla = list(int.strategy = "eb"),
+                          control.inla = list(int.strategy = "eb"),
                           bru_verbose = 4,
-                          bru_max_iter = 10,
+                          bru_max_iter = 5,
                           bru_initial = inits))
   end <- Sys.time()
-  runtime_integrated <- difftime( end,start, units="mins")
+  runtime_integrated <- difftime( end,start, units="mins") # 35 min
   
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   # PREDICTION SURFACES
@@ -715,13 +708,12 @@ for (sp_code in species_to_fit$Species){
     apply(.,1,median) %>%
     exp()
   
+
   # Add lognormal variance correction
-  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]) # * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4]) 
+  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
   
   # Add lognormal variance correction
-  pred_surface_integrated <- pred_surface_integrated  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4]) # * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
-  
-  #rm(list = c("fit_integrated","fit_PConly"))
+  pred_surface_integrated <- pred_surface_integrated  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4])  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
   
   pred_surface_PConly[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this
   pred_surface_integrated[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this)

@@ -33,361 +33,370 @@ library(napops) # For detectability offsets  # devtools::install_github("na-pops
 rm(list=ls())
 
 # Import rasters, data, and covariates from "standard analysis"
-setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
-`%!in%` <- Negate(`%in%`)
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/")
 
-# **************************************************************************************
-# Functions for plotting
-# **************************************************************************************
-
-# ------------------------------------------------
-# Function to rasterize
-# ------------------------------------------------
-
-cut.fn <- function(df, column_name, lower_bound = NA, upper_bound = NA){
-  
-  max_val <- upper_bound
-  max_val <- ifelse(is.na(max_val), 0, max_val)
-  
-  max_lev <- ifelse(max_val > 1.6, 4, 
-                    ifelse(max_val > 0.8, 4, 3))
-  
-  cut_levs <- signif(max_val/(2^((max_lev-1):0)), 2)
-  cut_levs <- unique(cut_levs)
-  cut_levs <- ifelse(is.na(cut_levs), 0, cut_levs)
-  
-  if (lower_bound %in% cut_levs) cut_levs <- cut_levs[-which(cut_levs == lower_bound)]
-  if (lower_bound > min(cut_levs)) cut_levs = cut_levs[-which(cut_levs < lower_bound)]
-  
-  max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
-  
-  cut_levs_labs <- c(paste0("0-",lower_bound),
-                     paste(lower_bound, cut_levs[1], sep="-"),
-                     paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
-                     paste(cut_levs[max_lev], "+"))
-  
-  cut_levs <- c(-1, lower_bound, cut_levs, 1000) %>% unique()
-  
-  # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
-  df$pc_cut <- cut(as.data.frame(df)[,column_name], cut_levs, labels=cut_levs_labs, ordered=TRUE)
-  
-  sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
-  sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
-  
-  sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==2] <- cut_levs_labs[2]
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==3] <- cut_levs_labs[3]
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
-  sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
-  
-  sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
-                                       levels= c(cut_levs_labs[1],cut_levs_labs[2],cut_levs_labs[3],
-                                                 cut_levs_labs[4],cut_levs_labs[5],cut_levs_labs[6]),
-                                       ordered = T)
-  return(sp_abund_raster_data)
-}
-
-# Custom cut points
-cut.fn2 <- function(df, column_name, cut_levs = cut_levs){
-  
-  
-  lower_bound <- min(cut_levs)
-  upper_bound <- max(cut_levs)
-  
-  max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
-  
-  cut_levs_labs <- c(paste0("0-",cut_levs[1]),
-                     paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
-                     paste(cut_levs[max_lev], "+"))
-  
-  cut_levs <- c(-1, cut_levs, 1000) %>% unique()
-  
-  # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
-  df$pc_cut <- cut(as.data.frame(df)[,column_name], 
-                   cut_levs, 
-                   labels=cut_levs_labs, 
-                   ordered=TRUE)
-  
-  sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
-  sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
-  
-  sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
-  for (i in unique(sp_abund_raster_data$layer)) sp_abund_raster_data$layer[sp_abund_raster_data$layer==i] <- cut_levs_labs[i]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==2] <- cut_levs_labs[2]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==3] <- cut_levs_labs[3]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
-  # sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
-  # 
-  sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
-                                       levels= cut_levs_labs,
-                                       ordered = T)
-  return(sp_abund_raster_data)
-}
-
-# ------------------------------------------------
-# Colour scales
-# ------------------------------------------------
-
-colscale_density <- c("#FEFEFE", "#FFF4B3", "#F5D271", "#F2B647", "#EC8E00", "#CA302A")
-colpal_density <- colorRampPalette(colscale_density)
-
-colscale_relabund <-c("#FEFEFE", "#FBF7E2", "#FCF8D0", "#EEF7C2", "#CEF2B0", "#94E5A0", "#51C987", "#18A065", "#008C59", "#007F53", "#006344")
-colpal_relabund <- colorRampPalette(colscale_relabund)
-
-
-# ************************************************************************************
-# ------------------------------------------------------------------------------------
-# Load/prepare data
-# ------------------------------------------------------------------------------------
-# ************************************************************************************
-
-# --------------------------------
-# Load 1 km x 1 km covariate spatial grid (same grid onto which predictions will be made)
-# --------------------------------
-
-load("!Data_processed/SaskGrid_PCA.RData")
-SaskPoints <- st_centroid(SaskGrid) %>% dplyr::select(pointid)
-SaskPoints$y <- st_coordinates(SaskPoints)[,2]
-SaskPoints$x <- st_coordinates(SaskPoints)[,1]
-
-# Raster with target resolution
-SaskRaster <- raster("!Shapefiles/RasterGrid/SaskRaster.tif")
-
-# Study area boundary
-SaskBoundary <- read_sf("!Shapefiles/SaskBoundary/SaskBoundary_Project.shp")
-
-# --------------------------------
-# Load Point count data
-# --------------------------------
-
-# Pointcount_dataset: locations and covariates associated with each point count
-load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
-
-# Covariates / spatial locations of each point count survey
-PC_surveyinfo <- Pointcount_data$PC_surveyinfo
-
-# Counts associated with each point count survey
-PC_matrix <- Pointcount_data$PC_matrix
-
-# ******
-# Selection criteria for point counts to use in analysis
-# *********
-PC_to_use <- which(PC_surveyinfo$DurationInMinutes %in% c(3,5,10)) # Time of day, day of year????
-PC_surveyinfo <- PC_surveyinfo[PC_to_use,]
-PC_matrix <- PC_matrix[PC_to_use,]
-
-rm(Pointcount_data)
-
-# --------------------------------
-# Load Checklist data
-# --------------------------------
-
-# Pointcount_dataset: locations and covariates associated with each point count
-load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
-
-# Covariates / spatial locations of each checklist survey (daily observations)
-DO_surveyinfo <- Checklist_data$DO_surveyinfo
-
-# Counts associated with each checklist survey
-DO_matrix <- Checklist_data$DO_matrix
-
-# --------------------------------
-# Z-standardize covariates prior to analysis (to have mean = 0 and SD = 1)
-#   (helps with model convergence, prior specification, etc)
-# --------------------------------
-
-# Covariates to be used in this analysis: PC1, PC2, PC3, Water_5km
-
-# PC1
-mean <- mean(PC_surveyinfo$PC1,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC1,na.rm = TRUE)
-PC_surveyinfo$PC1 <- (PC_surveyinfo$PC1 - mean)/sd
-DO_surveyinfo$PC1 <- (DO_surveyinfo$PC1 - mean)/sd
-SaskGrid$PC1 <- (SaskGrid$PC1 - mean)/sd
-
-# PC2
-mean <- mean(PC_surveyinfo$PC2,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC2,na.rm = TRUE)
-PC_surveyinfo$PC2 <- (PC_surveyinfo$PC2 - mean)/sd
-DO_surveyinfo$PC2 <- (DO_surveyinfo$PC2 - mean)/sd
-SaskGrid$PC2 <- (SaskGrid$PC2 - mean)/sd
-
-# PC3
-mean <- mean(PC_surveyinfo$PC3,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC3,na.rm = TRUE)
-PC_surveyinfo$PC3 <- (PC_surveyinfo$PC3 - mean)/sd
-DO_surveyinfo$PC3 <- (DO_surveyinfo$PC3 - mean)/sd
-SaskGrid$PC3 <- (SaskGrid$PC3 - mean)/sd
-
-# Water_5km
-mean <- mean(PC_surveyinfo$Water_5km,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$Water_5km,na.rm = TRUE)
-PC_surveyinfo$Water_5km <- (PC_surveyinfo$Water_5km - mean)/sd
-DO_surveyinfo$Water_5km <- (DO_surveyinfo$Water_5km - mean)/sd
-SaskGrid$Water_5km <- (SaskGrid$Water_5km - mean)/sd
-
-# ------------------------------------------------
-# Process species names / labels (from Birds Canada)
-# ------------------------------------------------
-
-Sask_spcd <- read.csv("!Data/SaskAtlas_Species_2022-05-16.csv", stringsAsFactors = F)
-countSpaces <- function(s) { sapply(gregexpr(" ", s), function(p) { sum(p>=0) } ) }
-
-# Process Species Names so they fit
-Sask_spcd$Label <- NA
-Sask_spcd$CommonName[Sask_spcd$CommonName=="Rock Pigeon (Feral Pigeon)"] <- "Rock Pigeon"
-
-for (i in 1:nrow(Sask_spcd)) {
-  Name <- Sask_spcd$CommonName[i]
-  if(nchar(Name) > 13){
-    if(countSpaces(Name)>0){
-      Sask_spcd$Label[i] <- gsub(" "," \n",Name)
-    } 
-    
-  }
-  else {
-    Sask_spcd$Label[i] <- Sask_spcd$CommonName[i]
-  }
-  
-}
-
-# ------------------------------------------------
-# List of species in the NA-POPS database (i.e., species with detectability offsets)
-#    - species without detectability offsets will only have relative abundance maps (not actual density maps)
-# ------------------------------------------------
-
-# napops_species <- napops::list_species()
-
-# *************************************************************
-# Calculate number of unique atlas squares in which each species was detected
-# (in both point counts and checklists)
-# *************************************************************
-
-# Load squares to withhold for crossvalidation
-SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval_20km.shp") %>%
-  st_transform(crs(PC_surveyinfo))
-SaskSquares$sq_idx <- as.numeric(factor(SaskSquares$SQUARE_ID))
-SaskSquares_centroids <- st_centroid(SaskSquares)
-
-# species_distribution_summary <- data.frame()
+# `%!in%` <- Negate(`%in%`)
 # 
-# for (sp_code in colnames(PC_matrix)){
+# # **************************************************************************************
+# # Functions for plotting
+# # **************************************************************************************
+# 
+# # ------------------------------------------------
+# # Function to rasterize
+# # ------------------------------------------------
+# 
+# cut.fn <- function(df, column_name, lower_bound = NA, upper_bound = NA){
 #   
-#   if (sp_code %!in% colnames(DO_matrix)) next
+#   max_val <- upper_bound
+#   max_val <- ifelse(is.na(max_val), 0, max_val)
 #   
-#   # point counts
-#   PC_df <- data.frame(sp_code = sp_code,
-#                       obs_index = PC_surveyinfo$obs_index,
-#                       sq_id = PC_surveyinfo$sq_id,
-#                       count = PC_matrix[,sp_code])
-#   # checklists
-#   CL_df <- data.frame(sp_code = sp_code,
-#                       obs_index = DO_surveyinfo$obs_index,
-#                       sq_id = DO_surveyinfo$sq_id,
-#                       ProtocolType = DO_surveyinfo$ProtocolType,
-#                       count = DO_matrix[,sp_code])
+#   max_lev <- ifelse(max_val > 1.6, 4, 
+#                     ifelse(max_val > 0.8, 4, 3))
 #   
-#   # Calculate presence/absence summaries within each atlas square
-#   sq_summary_PC <- PC_df %>%
-#     group_by(sp_code,sq_id) %>%
-#     summarize(n_surveys_PC = n(),
-#               count_sum_PC = sum(count),
-#               count_mean_PC = mean(count),
-#               count_max_PC = max(count)) %>%
-#     mutate(presence_PC = count_sum_PC > 0)
+#   cut_levs <- signif(max_val/(2^((max_lev-1):0)), 2)
+#   cut_levs <- unique(cut_levs)
+#   cut_levs <- ifelse(is.na(cut_levs), 0, cut_levs)
 #   
-#   sq_summary_CL <- CL_df %>%
-#     group_by(sp_code,sq_id) %>%
-#     summarize(n_surveys_CL = n(),
-#               count_sum_CL = sum(count),
-#               count_mean_CL = mean(count),
-#               count_max_CL = max(count)) %>%
-#     mutate(presence_CL = count_sum_CL > 0)
+#   if (lower_bound %in% cut_levs) cut_levs <- cut_levs[-which(cut_levs == lower_bound)]
+#   if (lower_bound > min(cut_levs)) cut_levs = cut_levs[-which(cut_levs < lower_bound)]
 #   
-#   # merge
-#   sq_summary_sp <- full_join(sq_summary_PC,sq_summary_CL)
-#   sq_summary_sp[is.na(sq_summary_sp)] <- 0
+#   max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
 #   
-#   species_distribution_summary <- rbind(species_distribution_summary,
-#                                         data.frame(sp_code = sp_code,
-#                                                    n_sq = sum((sq_summary_sp$presence_PC + sq_summary_sp$presence_CL)>0),
-#                                                    n_PC = sum(sq_summary_sp$presence_PC > 0),
-#                                                    n_CL = sum(sq_summary_sp$presence_CL > 0),
-#                                                    n_PConly = sum(sq_summary_sp$presence_PC > 0 & sq_summary_sp$presence_CL == 0),
-#                                                    n_CLonly = sum(sq_summary_sp$presence_CL > 0 & sq_summary_sp$presence_PC == 0),
-#                                                    n_both = sum(sq_summary_sp$presence_PC > 0 & sq_summary_sp$presence_CL > 0)))
-#   print(sp_code)
+#   cut_levs_labs <- c(paste0("0-",lower_bound),
+#                      paste(lower_bound, cut_levs[1], sep="-"),
+#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
+#                      paste(cut_levs[max_lev], "+"))
+#   
+#   cut_levs <- c(-1, lower_bound, cut_levs, 1000) %>% unique()
+#   
+#   # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
+#   df$pc_cut <- cut(as.data.frame(df)[,column_name], cut_levs, labels=cut_levs_labs, ordered=TRUE)
+#   
+#   sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
+#   sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
+#   
+#   sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==2] <- cut_levs_labs[2]
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==3] <- cut_levs_labs[3]
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
+#   sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
+#   
+#   sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
+#                                        levels= c(cut_levs_labs[1],cut_levs_labs[2],cut_levs_labs[3],
+#                                                  cut_levs_labs[4],cut_levs_labs[5],cut_levs_labs[6]),
+#                                        ordered = T)
+#   return(sp_abund_raster_data)
 # }
+# 
+# # Custom cut points
+# cut.fn2 <- function(df, column_name, cut_levs = cut_levs){
+#   
+#   
+#   lower_bound <- min(cut_levs)
+#   upper_bound <- max(cut_levs)
+#   
+#   max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
+#   
+#   cut_levs_labs <- c(paste0("0-",cut_levs[1]),
+#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
+#                      paste(cut_levs[max_lev], "+"))
+#   
+#   cut_levs <- c(-1, cut_levs, 1000) %>% unique()
+#   
+#   # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
+#   df$pc_cut <- cut(as.data.frame(df)[,column_name], 
+#                    cut_levs, 
+#                    labels=cut_levs_labs, 
+#                    ordered=TRUE)
+#   
+#   sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
+#   sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
+#   
+#   sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
+#   for (i in unique(sp_abund_raster_data$layer)) sp_abund_raster_data$layer[sp_abund_raster_data$layer==i] <- cut_levs_labs[i]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==2] <- cut_levs_labs[2]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==3] <- cut_levs_labs[3]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
+#   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
+#   # 
+#   sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
+#                                        levels= cut_levs_labs,
+#                                        ordered = T)
+#   return(sp_abund_raster_data)
+# }
+# 
+# # ------------------------------------------------
+# # Colour scales
+# # ------------------------------------------------
+# 
+# colscale_density <- c("#FEFEFE", "#FFF4B3", "#F5D271", "#F2B647", "#EC8E00", "#CA302A")
+# colpal_density <- colorRampPalette(colscale_density)
+# 
+# colscale_relabund <-c("#FEFEFE", "#FBF7E2", "#FCF8D0", "#EEF7C2", "#CEF2B0", "#94E5A0", "#51C987", "#18A065", "#008C59", "#007F53", "#006344")
+# colpal_relabund <- colorRampPalette(colscale_relabund)
+# 
+# 
+# # ************************************************************************************
+# # ------------------------------------------------------------------------------------
+# # Load/prepare data
+# # ------------------------------------------------------------------------------------
+# # ************************************************************************************
+# 
+# # --------------------------------
+# # Load 1 km x 1 km covariate spatial grid (same grid onto which predictions will be made)
+# # --------------------------------
+# 
+# load("!Data_processed/SaskGrid_PCA.RData")
+# SaskPoints <- st_centroid(SaskGrid) %>% dplyr::select(pointid)
+# SaskPoints$y <- st_coordinates(SaskPoints)[,2]
+# SaskPoints$x <- st_coordinates(SaskPoints)[,1]
+# 
+# # Raster with target resolution
+# SaskRaster <- raster("!Shapefiles/RasterGrid/SaskRaster.tif")
+# 
+# # Study area boundary
+# SaskBoundary <- read_sf("!Shapefiles/SaskBoundary/SaskBoundary_Project.shp")
+# 
+# # --------------------------------
+# # Load Point count data
+# # --------------------------------
+# 
+# # Pointcount_dataset: locations and covariates associated with each point count
+# load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
+# 
+# # Covariates / spatial locations of each point count survey
+# PC_surveyinfo <- Pointcount_data$PC_surveyinfo
+# 
+# # Counts associated with each point count survey
+# PC_matrix <- Pointcount_data$PC_matrix
+# 
+# # ******
+# # Selection criteria for point counts to use in analysis
+# # *********
+# PC_to_use <- which(PC_surveyinfo$DurationInMinutes %in% c(3,5,10)) # Time of day, day of year????
+# PC_surveyinfo <- PC_surveyinfo[PC_to_use,]
+# PC_matrix <- PC_matrix[PC_to_use,]
+# 
+# rm(Pointcount_data)
+# 
+# # --------------------------------
+# # Load Checklist data
+# # --------------------------------
+# 
+# # Pointcount_dataset: locations and covariates associated with each point count
+# load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
+# 
+# # Covariates / spatial locations of each checklist survey (daily observations)
+# DO_surveyinfo <- Checklist_data$DO_surveyinfo
+# 
+# # Counts associated with each checklist survey
+# DO_matrix <- Checklist_data$DO_matrix
+# 
+# # --------------------------------
+# # Z-standardize covariates prior to analysis (to have mean = 0 and SD = 1)
+# #   (helps with model convergence, prior specification, etc)
+# # --------------------------------
+# 
+# # Covariates to be used in this analysis: PC1, PC2, PC3, Water_5km
+# 
+# # PC1
+# mean <- mean(PC_surveyinfo$PC1,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC1,na.rm = TRUE)
+# PC_surveyinfo$PC1 <- (PC_surveyinfo$PC1 - mean)/sd
+# DO_surveyinfo$PC1 <- (DO_surveyinfo$PC1 - mean)/sd
+# SaskGrid$PC1 <- (SaskGrid$PC1 - mean)/sd
+# 
+# # PC2
+# mean <- mean(PC_surveyinfo$PC2,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC2,na.rm = TRUE)
+# PC_surveyinfo$PC2 <- (PC_surveyinfo$PC2 - mean)/sd
+# DO_surveyinfo$PC2 <- (DO_surveyinfo$PC2 - mean)/sd
+# SaskGrid$PC2 <- (SaskGrid$PC2 - mean)/sd
+# 
+# # PC3
+# mean <- mean(PC_surveyinfo$PC3,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$PC3,na.rm = TRUE)
+# PC_surveyinfo$PC3 <- (PC_surveyinfo$PC3 - mean)/sd
+# DO_surveyinfo$PC3 <- (DO_surveyinfo$PC3 - mean)/sd
+# SaskGrid$PC3 <- (SaskGrid$PC3 - mean)/sd
+# 
+# # Water_5km
+# mean <- mean(PC_surveyinfo$Water_5km,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$Water_5km,na.rm = TRUE)
+# PC_surveyinfo$Water_5km <- (PC_surveyinfo$Water_5km - mean)/sd
+# DO_surveyinfo$Water_5km <- (DO_surveyinfo$Water_5km - mean)/sd
+# SaskGrid$Water_5km <- (SaskGrid$Water_5km - mean)/sd
+# 
+# # ------------------------------------------------
+# # Process species names / labels (from Birds Canada)
+# # ------------------------------------------------
+# 
+# Sask_spcd <- read.csv("!Data/SaskAtlas_Species_2022-05-16.csv", stringsAsFactors = F)
+# countSpaces <- function(s) { sapply(gregexpr(" ", s), function(p) { sum(p>=0) } ) }
+# 
+# # Process Species Names so they fit
+# Sask_spcd$Label <- NA
+# Sask_spcd$CommonName[Sask_spcd$CommonName=="Rock Pigeon (Feral Pigeon)"] <- "Rock Pigeon"
+# 
+# for (i in 1:nrow(Sask_spcd)) {
+#   Name <- Sask_spcd$CommonName[i]
+#   if(nchar(Name) > 13){
+#     if(countSpaces(Name)>0){
+#       Sask_spcd$Label[i] <- gsub(" "," \n",Name)
+#     } 
+#     
+#   }
+#   else {
+#     Sask_spcd$Label[i] <- Sask_spcd$CommonName[i]
+#   }
+#   
+# }
+# 
+# # ------------------------------------------------
+# # List of species in the NA-POPS database (i.e., species with detectability offsets)
+# #    - species without detectability offsets will only have relative abundance maps (not actual density maps)
+# # ------------------------------------------------
+# 
+# # napops_species <- napops::list_species()
+# 
+# # *************************************************************
+# # Calculate number of unique atlas squares in which each species was detected
+# # (in both point counts and checklists)
+# # *************************************************************
+# 
+# # Load squares to withhold for crossvalidation
+# SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval_20km.shp") %>%
+#   st_transform(crs(PC_surveyinfo))
+# SaskSquares$sq_idx <- as.numeric(factor(SaskSquares$SQUARE_ID))
+# SaskSquares_centroids <- st_centroid(SaskSquares)
+# 
+# # species_distribution_summary <- data.frame()
+# # 
+# # for (sp_code in colnames(PC_matrix)){
+# # 
+# #   if (sp_code %!in% colnames(DO_matrix)) next
+# # 
+# #   # point counts
+# #   PC_df <- data.frame(sp_code = sp_code,
+# #                       obs_index = PC_surveyinfo$obs_index,
+# #                       sq_id = PC_surveyinfo$sq_id,
+# #                       count = PC_matrix[,sp_code])
+# #   # checklists
+# #   CL_df <- data.frame(sp_code = sp_code,
+# #                       obs_index = DO_surveyinfo$obs_index,
+# #                       sq_id = DO_surveyinfo$sq_id,
+# #                       ProtocolType = DO_surveyinfo$ProtocolType,
+# #                       count = DO_matrix[,sp_code])
+# # 
+# #   # Calculate presence/absence summaries within each atlas square
+# #   sq_summary_PC <- PC_df %>%
+# #     group_by(sp_code,sq_id) %>%
+# #     summarize(n_surveys_PC = n(),
+# #               count_sum_PC = sum(count),
+# #               count_mean_PC = mean(count),
+# #               count_max_PC = max(count)) %>%
+# #     mutate(presence_PC = count_sum_PC > 0)
+# # 
+# #   sq_summary_CL <- CL_df %>%
+# #     group_by(sp_code,sq_id) %>%
+# #     summarize(n_surveys_CL = n(),
+# #               count_sum_CL = sum(count),
+# #               count_mean_CL = mean(count),
+# #               count_max_CL = max(count)) %>%
+# #     mutate(presence_CL = count_sum_CL > 0)
+# # 
+# #   # merge
+# #   sq_summary_sp <- full_join(sq_summary_PC,sq_summary_CL)
+# #   sq_summary_sp[is.na(sq_summary_sp)] <- 0
+# # 
+# #   species_distribution_summary <- rbind(species_distribution_summary,
+# #                                         data.frame(sp_code = sp_code,
+# #                                                    n_sq = sum((sq_summary_sp$presence_PC + sq_summary_sp$presence_CL)>0),
+# #                                                    n_PC = sum(sq_summary_sp$presence_PC > 0),
+# #                                                    n_CL = sum(sq_summary_sp$presence_CL > 0),
+# #                                                    n_PConly = sum(sq_summary_sp$presence_PC > 0 & sq_summary_sp$presence_CL == 0),
+# #                                                    n_CLonly = sum(sq_summary_sp$presence_CL > 0 & sq_summary_sp$presence_PC == 0),
+# #                                                    n_both = sum(sq_summary_sp$presence_PC > 0 & sq_summary_sp$presence_CL > 0)))
+# #   print(sp_code)
+# # }
+# 
 # 
 # # *************************************************************
 # # Select species for analysis
 # # *************************************************************
+# # 
+# # # Proportion of total that is CL only
+# # species_distribution_summary$prop_CLonly <- species_distribution_summary$n_CLonly/species_distribution_summary$n_sq
+# # 
+# # # Number of unique locations where species were detected
+# # species_relabund_PC <- colSums(PC_matrix>0,na.rm = TRUE) %>% sort(decreasing = TRUE) %>% as.data.frame() %>% rename(PC = 1)
+# # species_relabund_PC$Species <- rownames(species_relabund_PC)
+# # species_relabund_DO <- colSums(DO_matrix>0,na.rm = TRUE) %>% sort(decreasing = TRUE) %>% as.data.frame() %>% rename(DO = 1)
+# # species_relabund_DO$Species <- rownames(species_relabund_DO)
+# # species_relabund <- full_join(species_relabund_PC,species_relabund_DO)
+# # species_relabund <- na.omit(species_relabund)
+# # 
+# # species_relabund <- full_join(species_relabund,species_distribution_summary,
+# #                               by = c("Species" = "sp_code")) %>%
+# #   dplyr::relocate(Species)
 # 
-# # Proportion of total that is CL only
-# species_distribution_summary$prop_CLonly <- species_distribution_summary$n_CLonly/species_distribution_summary$n_sq
+# #save(species_relabund,file="../AOS_precision/output/species_relabund.RData")
+# load(file="../AOS_precision/output/species_relabund.RData")
 # 
-# # Number of unique locations where species were detected
-# species_relabund_PC <- colSums(PC_matrix>0,na.rm = TRUE) %>% sort(decreasing = TRUE) %>% as.data.frame() %>% rename(PC = 1)
-# species_relabund_PC$Species <- rownames(species_relabund_PC)
-# species_relabund_DO <- colSums(DO_matrix>0,na.rm = TRUE) %>% sort(decreasing = TRUE) %>% as.data.frame() %>% rename(DO = 1)
-# species_relabund_DO$Species <- rownames(species_relabund_DO)
-# species_relabund <- full_join(species_relabund_PC,species_relabund_DO)
-# species_relabund <- na.omit(species_relabund)
+# # Only consider species detected in at least 100 squares
+# species_to_fit <- subset(species_relabund, 
+#                          n_PC > 100 & n_CL > 100 & n_sq >=250 & n_sq <= 500) %>%
+#   arrange(desc(prop_CLonly))
 # 
-# species_relabund <- full_join(species_relabund,species_distribution_summary,
-#                               by = c("Species" = "sp_code")) %>%
-#   dplyr::relocate(Species)
+# 
+# ggplot(species_to_fit, aes(x = n_PC, y = n_CL,label=Species, col = prop_CLonly))+
+#   geom_point()+
+#   geom_text_repel()+
+#   scale_color_gradientn(colors = viridis(10))+
+#   theme_bw()
+# 
+# # ************************************************************************************
+# # ------------------------------------------------------------------------------------
+# # Analysis (note some additional data wrangling is needed on a species-by-species basis)
+# # ------------------------------------------------------------------------------------
+# # ************************************************************************************
+# SaskWater <- read_sf("!Shapefiles/Water/SaskWaterClip.shp")
+# SaskWater <- st_transform(SaskWater, crs = st_crs(SaskBoundary))
+# SaskWater$area <- st_area(SaskWater)
+# SaskWater$area <- as.numeric(SaskWater$area)
+# SaskWater <- SaskWater[SaskWater$area>2.580e+06 ,]
+# 
+# Water_centroids <- SaskGrid %>%
+#   dplyr::select(pointid) %>%
+#   st_centroid() %>%
+#   st_intersection(.,SaskWater)
+# 
 
-#save(species_relabund,file="../AOS_precision/output/species_relabund.RData")
-load(file="../AOS_precision/output/species_relabund.RData")
-
-# Only consider species detected in at least 100 squares
-species_to_fit <- subset(species_relabund, 
-                         n_PC > 100 & n_CL > 100 & n_sq >=250 & n_sq <= 500) %>%
-  arrange(desc(prop_CLonly))
 
 
-ggplot(species_to_fit, aes(x = n_PC, y = n_CL,label=Species, col = prop_CLonly))+
-  geom_point()+
-  geom_text_repel()+
-  scale_color_gradientn(colors = viridis(10))+
-  theme_bw()
-
-# ************************************************************************************
-# ------------------------------------------------------------------------------------
-# Analysis (note some additional data wrangling is needed on a species-by-species basis)
-# ------------------------------------------------------------------------------------
-# ************************************************************************************
-SaskWater <- read_sf("!Shapefiles/Water/SaskWaterClip.shp")
-SaskWater <- st_transform(SaskWater, crs = st_crs(SaskBoundary))
-SaskWater$area <- st_area(SaskWater)
-SaskWater$area <- as.numeric(SaskWater$area)
-SaskWater <- SaskWater[SaskWater$area>2.580e+06 ,]
-
-Water_centroids <- SaskGrid %>%
-  dplyr::select(pointid) %>%
-  st_centroid() %>%
-  st_intersection(.,SaskWater)
+#save.image("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp.RData")
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp.RData")
 
 surface_comparison <- data.frame()
-if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
-  load("../AOS_precision/output/surface_comparison_RE_effort.RData")
+if (file.exists("../AOS_precision/output/surface_comparison_test2.RData")){
+  load("../AOS_precision/output/surface_comparison_test2.RData")
 }
 
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
 for (sp_code in species_to_fit$Species){
-
-  if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
-    load("../AOS_precision/output/surface_comparison_RE_effort.RData")
-  }
   
+
+  if (file.exists("../AOS_precision/output/surface_comparison_test2.RData")){
+    load("../AOS_precision/output/surface_comparison_test2.RData")
+  }
+
   # Check if this species/xval fold have already been run. If so, skip
   if (nrow(surface_comparison)>0){
     if (nrow(subset(surface_comparison,Species == sp_code))>0) next
   }
-  
+
   print(sp_code)
   
   # --------------------------------
@@ -439,7 +448,24 @@ for (sp_code in species_to_fit$Species){
   PC_sf <- st_intersection(PC_sf, SaskSquares)
   CL_sf <- st_intersection(CL_sf, SaskSquares)
   
-  PC_sp <- as(PC_sf,'Spatial')
+  # --------------------------------
+  # DEFINE SQUARE-DAY COVARIATE
+  # --------------------------------
+  squareday_df <- rbind(as.data.frame(PC_sf)[,c("Date","sq_id")],
+                        as.data.frame(CL_sf)[,c("Date","sq_id")]) %>%
+    unique()
+  
+  squareday_df$square_day <- 1:nrow(squareday_df)
+  
+  
+  PC_sf <- left_join(PC_sf,squareday_df)
+  CL_sf <- left_join(CL_sf,squareday_df)
+  
+  # --------------------------------
+  # DEFINE OBSERVATION-LEVEL RANDOM EFFECT
+  # --------------------------------
+  
+  PC_sf$surveyID <- 1:nrow(PC_sf)
   
   # --------------------------------
   # Separate different types of checklists
@@ -459,6 +485,11 @@ for (sp_code in species_to_fit$Species){
                      DurationInHours > 0 &
                      DurationInHours <= 1)
   
+  # --------------------------------
+  # Convert to spatial objects
+  # --------------------------------
+  
+  PC_sp <- as(PC_sf,'Spatial')
   SC_sp <- as(SC_sf,'Spatial')
   LT_sp <- as(LT_sf,'Spatial')
   BBA_sp <- as(BBA_sf,'Spatial')
@@ -477,7 +508,7 @@ for (sp_code in species_to_fit$Species){
   bound.outer = diff(range(st_coordinates(all_points)[,1]))/3
   
   mesh_spatial <- inla.mesh.2d(loc = st_coordinates(all_points),
-                               cutoff = max.edge/5,
+                               cutoff = max.edge/2, #max.edge/5,
                                max.edge = c(1,2)*max.edge,
                                offset=c(max.edge, bound.outer))
   
@@ -486,19 +517,20 @@ for (sp_code in species_to_fit$Species){
   #plot(mesh_spatial)
   
   matern_coarse <- inla.spde2.pcmatern(mesh_spatial,
-                                       prior.range = c(max.edge*5, 0.1), # 10% chance range is smaller than 500000
-                                       prior.sigma = c(1, 0.1)      # 10% chance sd is larger than 1
-  )                # sum to 1 constraint
+                                       #prior.range = c(max.edge*5, 0.1), # 10% chance range is smaller than 500000
+                                       prior.range = c(250000,0.1),
+                                       prior.sigma = c(2, 0.1), # 1% chance sd is larger than 2
+                                       constr = TRUE # sum to 0 constraint
+  )                
   
   # --------------------------------
-  # Define square-level random effects
+  # Define random effect prior
   # --------------------------------
   
-  # Point counts
   kappa_prec <- list(prior = "pcprec", param = c(1,0.1))
-  
+
   # --------------------------------
-  # Create 'temporal mesh' to model effect of checklist duration
+  # Create mesh to model effect of checklist duration
   # --------------------------------
   # 
   SC_duration_meshpoints <- seq(0,max(SC_sf$DurationInHours)+0.1,length.out = 11)
@@ -519,14 +551,6 @@ for (sp_code in species_to_fit$Species){
   # BBA_duration_spde = inla.spde2.pcmatern(BBA_duration_mesh1D,
   #                                         prior.range = c(1,0.9), # 90% chance range is smaller than 1
   #                                         prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
-  # 
-  
-  # --------------------------------
-  # NOTE: I've written the code below so we can add/remove covariates easily by including them
-  #       in the vector called "covariates_to_include"
-  #
-  #       We could simplify this potentially to make the code easier to read/understand
-  # --------------------------------
   
   # --------------------------------
   # Model components
@@ -534,27 +558,24 @@ for (sp_code in species_to_fit$Species){
   
   covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
   
-  
   # LT_effort(main = DurationInHours,model = LT_duration_spde) +
   # BBA_effort(main = DurationInHours,model = BBA_duration_spde) +
   #Intercept_LT(1)+
   #Intercept_BBA(1)+
-  #kappa_BBA(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  
+  # 
+  #SC_effort(main = DurationInHours,model = SC_duration_spde) +
   model_components = as.formula(paste0('~
   Intercept_PC(1)+
   Intercept_SC(1)+
+  kappa_surveyID(surveyID, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  spde_coarse(main = coordinates, model = matern_coarse) +
   
-  kappa_PC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_SC(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_shared(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  SC_effort(main = DurationInHours,model = SC_duration_spde) +
-  spde_coarse(main = coordinates, model = matern_coarse) + 
+  
   ',
                                        
-                                       paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 16)', collapse = " + "))
+                                       paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
   )
   
   model_components
@@ -562,112 +583,97 @@ for (sp_code in species_to_fit$Species){
   # --------------------------------
   # Model formulas
   # --------------------------------
-  
-  model_formula_PConly = as.formula(paste0('count ~
-                  Intercept_PC +
-                  kappa_PC +
-                  spde_coarse +
-                   ',
-                                           paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                           " + ",
-                                           paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
-  
+
   model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
+                  kappa_surveyID +
+                  kappa_squareID +
+                  kappa_squareday +
                   spde_coarse +
-                  kappa_PC +
-                  kappa_shared +
                    ',
-                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
+                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
   
+  #SC_effort +
   model_formula_SC = as.formula(paste0('presence ~ log(1/exp(-exp(
 
                   Intercept_SC +
+                  kappa_squareID +
+                  kappa_squareday +
                   spde_coarse +
-                  kappa_SC +
-                  kappa_shared +
-                  SC_effort +
                                        ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
                                        "))-1)"))
   
-  model_formula_LT = as.formula(paste0('presence ~ log(1/exp(-exp(
-
-                  Intercept_LT +
-                  spde_coarse +
-                  kappa_shared +
-                                       ',
-                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                       " + ",
-                                       paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
-                                       "))-1)"))
-  
-  model_formula_BBA = as.formula(paste0('presence ~ log(1/exp(-exp(
-
-                  Intercept_BBA +
-                  spde_coarse +
-                  kappa_shared +
-                                       ',
-                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                        " + ",
-                                        paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + "),
-                                        "))-1)"))
+  # model_formula_LT = as.formula(paste0('presence ~ log(1/exp(-exp(
+  # 
+  #                 Intercept_LT +
+  #                 spde_coarse +
+  #                                      ',
+  #                                      paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+  #                                      "))-1)"))
+  # 
+  # model_formula_BBA = as.formula(paste0('presence ~ log(1/exp(-exp(
+  # 
+  #                 Intercept_BBA +
+  #                 spde_coarse +
+  #                                      ',
+  #                                       paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
+  #                                       "))-1)"))
+  #
   
   # --------------------------------
   # Specify model likelihoods
   # --------------------------------
-  like_PConly <- like(family = "poisson",
-                      formula = model_formula_PConly,
-                      data = PC_sp)
+  
   like_PC <- like(family = "poisson",
                   formula = model_formula_PC,
                   data = PC_sp)
   like_SC <- like(family = "binomial",
                   formula = model_formula_SC,
                   data = SC_sp)
-  like_LT <- like(family = "binomial",
-                  formula = model_formula_LT,
-                  data = LT_sp)
-  like_BBA <- like(family = "binomial",
-                   formula = model_formula_BBA,
-                   data = BBA_sp)
+  # like_LT <- like(family = "binomial",
+  #                 formula = model_formula_LT,
+  #                 data = LT_sp)
+  # like_BBA <- like(family = "binomial",
+  #                  formula = model_formula_BBA,
+  #                  data = BBA_sp)
   
   # --------------------------------
   # Select reasonable initial values (should not affect inference, but affects model convergence)
   # --------------------------------
   
-  inits <- c(-5,-5,rep(0,length(covariates_to_include)*2)) %>% as.list()
+  inits <- c(-5,-5,rep(0,length(covariates_to_include))) %>% as.list()
   #,"Intercept_LT","Intercept_BBA"
-  names(inits) <- c("Intercept_PC","Intercept_SC",paste0("Beta1_",covariates_to_include), paste0("Beta2_",covariates_to_include))
+  names(inits) <- c("Intercept_PC","Intercept_SC",paste0("Beta1_",covariates_to_include))
   
   # --------------------------------
   # Fit models
   # --------------------------------
   
   #bru_options_set(inla.mode = "experimental")
-  #bru_options_reset()
+  bru_options_reset()
   
   start <- Sys.time()
-  
   fit_PConly <- bru(components = model_components,
-                    like_PConly,
+                    like_PC,
                     options = list(
-                      control.inla = list(int.strategy = "eb"),
+                      #control.inla = list(int.strategy = "eb"),
                       bru_verbose = 4,
-                      bru_max_iter = 25,
-                      bru_initial = inits)) 
+                      bru_max_iter = 10,
+                      bru_initial = inits))
+  end <- Sys.time()
+  runtime_PConly <- difftime( end,start, units="mins")
   
-  fit_integrated <- bru(components = model_components, 
-                        like_PC,like_SC,#like_LT,like_BBA,
-                        options = list(#control.compute = list(waic = TRUE, cpo = TRUE, config = TRUE),
-                          control.inla = list(int.strategy = "eb"),
+  start <- Sys.time()
+  fit_integrated <- bru(components = model_components,
+                        like_PC,like_SC,
+                        options = list(
+                          #control.inla = list(int.strategy = "eb"),
                           bru_verbose = 4,
-                          bru_max_iter = 25,
+                          bru_max_iter = 10,
                           bru_initial = inits))
+  end <- Sys.time()
+  runtime_integrated <- difftime( end,start, units="mins") # 35 min
   
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   # PREDICTION SURFACES
@@ -678,9 +684,7 @@ for (sp_code in species_to_fit$Species){
                   Intercept_PC +
                   spde_coarse +
                    ',
-                                      paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
-                                      " + ",
-                                      paste0("Beta2_",covariates_to_include,'*',covariates_to_include,"^2", collapse = " + ")))
+                                      paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
   
   species_name = Sask_spcd$CommonName[which(Sask_spcd$spcd == sp_code)]
   species_label = Sask_spcd$Label[which(Sask_spcd$spcd == sp_code)]
@@ -703,15 +707,13 @@ for (sp_code in species_to_fit$Species){
                                       n.samples = nsamp)%>%
     apply(.,1,median) %>%
     exp()
-  end = Sys.time()
+  
+
+  # Add lognormal variance correction
+  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
   
   # Add lognormal variance correction
-  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_PC",4])
-  
-  # Add lognormal variance correction
-  pred_surface_integrated <- pred_surface_integrated * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_PC",4]) * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_shared",4])
-  
-  #rm(list = c("fit_integrated","fit_PConly"))
+  pred_surface_integrated <- pred_surface_integrated  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4])  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
   
   pred_surface_PConly[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this
   pred_surface_integrated[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this)
@@ -789,9 +791,7 @@ for (sp_code in species_to_fit$Species){
     theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
           legend.title = element_markdown(lineheight=.9,hjust = "left"))
   
-  #print(pred_surface_map_PConly_q50)
-  
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_PConly_test2.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -823,9 +823,7 @@ for (sp_code in species_to_fit$Species){
     theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
           legend.title = element_markdown(lineheight=.9,hjust = "left"))
   
-  #print(pred_surface_map_integrated_q50)
-  
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot1_integrated_test2.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -834,15 +832,14 @@ for (sp_code in species_to_fit$Species){
   # ---------------------------------------------
   
   lower_bound <- 0.01
-  upper_bound <- quantile(pred_grid_sp$pred_integrated_med,0.99,na.rm = TRUE) %>% signif(2)
+  upper_bound <- quantile(pred_grid_sp$pred_PConly_med,0.99,na.rm = TRUE) %>% signif(2)
   if (lower_bound >= upper_bound){
-    upper_bound <- quantile(pred_grid_sp$pred_integrated_med,0.99,na.rm = TRUE) %>% signif(2)
+    upper_bound <- quantile(pred_grid_sp$pred_PConly_med,0.99,na.rm = TRUE) %>% signif(2)
     lower_bound <- (upper_bound/5) %>% signif(2)
   }
   
-  
   raster_pred_surface_PConly <- cut.fn(df = pred_grid_sp,
-                                        column_name = "pred_PConly_med",
+                                       column_name = "pred_PConly_med",
                                        lower_bound = lower_bound,
                                        upper_bound = upper_bound)
   
@@ -875,9 +872,9 @@ for (sp_code in species_to_fit$Species){
     theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
           legend.title = element_markdown(lineheight=.9,hjust = "left"))
   
-  #print(pred_surface_map_PConly_q50)
+  print(pred_surface_map_PConly_q50)
   
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_PConly_test2.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_PConly_q50)
   dev.off()
   
@@ -910,9 +907,7 @@ for (sp_code in species_to_fit$Species){
     theme(legend.margin=margin(0,0,0,0),legend.box.margin=margin(5,10,5,-20),legend.title.align=0.5,
           legend.title = element_markdown(lineheight=.9,hjust = "left"))
   
-  #print(pred_surface_map_integrated_q50)
-  
-  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated_effort.png"), width=6.5, height=8, units="in", res=300, type="cairo")
+  png(paste0("../AOS_precision/output/figures/",sp_code,"_plot2_integrated_test2.png"), width=6.5, height=8, units="in", res=300, type="cairo")
   print(pred_surface_map_integrated_q50)
   dev.off()
   
@@ -931,15 +926,12 @@ for (sp_code in species_to_fit$Species){
   # Correlation between maps
   correlation_between_surfaces <- cor(pred_grid_sp$pred_PConly_med,pred_grid_sp$pred_integrated_med, use = "complete.obs")
   
-  
-  end <- Sys.time() 
-  runtime_mins <- difftime( end,start, units="mins")
   # -------------------------------------------------------
   # Save results
   # -------------------------------------------------------
   
-  if (file.exists("../AOS_precision/output/surface_comparison_RE_effort.RData")){
-    load("../AOS_precision/output/surface_comparison_RE_effort.RData")
+  if (file.exists("../AOS_precision/output/surface_comparison_test2.RData")){
+    load("../AOS_precision/output/surface_comparison_test2.RData")
   }
   
   surface_comparison <- rbind(surface_comparison,
@@ -949,13 +941,14 @@ for (sp_code in species_to_fit$Species){
                                          core_PConly = core_PConly,
                                          core_integrated = core_integrated,
                                          correlation_between_surfaces = correlation_between_surfaces,
-                                         runtime_mins = round(as.numeric(runtime_mins))
+                                         runtime_PConly = runtime_PConly,
+                                         runtime_integrated = runtime_integrated
                               ))
   
   
-  print(paste(sp_code," ... ",round(runtime_mins),"mins"))
+  #print(paste(sp_code," ... ",round(runtime_mins),"mins"))
   
-  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_RE_effort.RData")
+  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_test2.RData")
   
   rm(list = c("pred_grid_sp","pred_surface_integrated","pred_surface_PConly","fit_integrated","fit_PConly","raster_pred_surface_PConly","raster_pred_surface_integrated"))
   
