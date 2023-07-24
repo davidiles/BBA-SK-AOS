@@ -33,7 +33,7 @@ library(napops) # For detectability offsets  # devtools::install_github("na-pops
 rm(list=ls())
 
 # Import rasters, data, and covariates from "standard analysis"
-setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/")
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 
 # `%!in%` <- Negate(`%in%`)
 # 
@@ -657,23 +657,23 @@ for (sp_code in species_to_fit$Species){
   fit_PConly <- bru(components = model_components,
                     like_PC,
                     options = list(
-                      #control.inla = list(int.strategy = "eb"),
+                      control.inla = list(int.strategy = "eb"),
                       bru_verbose = 4,
-                      bru_max_iter = 10,
+                      bru_max_iter = 5,
                       bru_initial = inits))
   end <- Sys.time()
-  runtime_PConly <- difftime( end,start, units="mins")
+  runtime_PConly <- difftime( end,start, units="mins") # 15 min
   
   start <- Sys.time()
   fit_integrated <- bru(components = model_components,
                         like_PC,like_SC,
                         options = list(
-                          #control.inla = list(int.strategy = "eb"),
+                          control.inla = list(int.strategy = "eb"),
                           bru_verbose = 4,
-                          bru_max_iter = 10,
+                          bru_max_iter = 5,
                           bru_initial = inits))
   end <- Sys.time()
-  runtime_integrated <- difftime( end,start, units="mins") # 35 min
+  runtime_integrated <- difftime( end,start, units="mins") # 18 min
   
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
   # PREDICTION SURFACES
