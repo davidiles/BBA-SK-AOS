@@ -385,18 +385,17 @@ if (file.exists("../AOS_precision/output/surface_comparison_test4.RData")){
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
-for (sp_code in species_to_fit$Species){
-  
-
+#for (sp_code in species_to_fit$Species){
+for (sp_code in "YHBL"){
   if (file.exists("../AOS_precision/output/surface_comparison_test4.RData")){
     load("../AOS_precision/output/surface_comparison_test4.RData")
   }
-
+  
   # Check if this species/xval fold have already been run. If so, skip
   if (nrow(surface_comparison)>0){
     if (nrow(subset(surface_comparison,Species == sp_code))>0) next
   }
-
+  
   print(sp_code)
   
   # --------------------------------
@@ -535,7 +534,7 @@ for (sp_code in species_to_fit$Species){
   # --------------------------------
   
   kappa_prec <- list(prior = "pcprec", param = c(1,0.1))
-
+  
   # --------------------------------
   # Create mesh to model effect of checklist duration
   # --------------------------------
@@ -543,8 +542,8 @@ for (sp_code in species_to_fit$Species){
   SC_effort_meshpoints <- seq(min(SC_sf$effort)-0.1,max(SC_sf$effort)+0.1,length.out = 11)
   SC_effort_mesh1D = inla.mesh.1d(SC_effort_meshpoints,boundary="free")
   SC_effort_spde = inla.spde2.pcmatern(SC_effort_mesh1D,
-                                         prior.range = c(1,0.5), 
-                                         prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
+                                       prior.range = c(1,0.5), 
+                                       prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
   
   LT_effort_meshpoints <- seq(min(LT_sf$effort)-0.1,max(LT_sf$effort)+0.1,length.out = 11)
   LT_effort_mesh1D = inla.mesh.1d(LT_effort_meshpoints,boundary="free")
@@ -594,7 +593,7 @@ for (sp_code in species_to_fit$Species){
   # --------------------------------
   # Model formulas
   # --------------------------------
-
+  
   model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
                   kappa_surveyID +
@@ -643,46 +642,10 @@ for (sp_code in species_to_fit$Species){
   #                  formula = model_formula_BBA,
   #                  data = BBA_sp)
   
-  # --------------------------------
-  # Select reasonable initial values (should not affect inference, but affects model convergence)
-  # --------------------------------
-  
-  inits <- c(-5,-5,-5,rep(0,length(covariates_to_include))) %>% as.list()
-  #,"Intercept_LT","Intercept_BBA"
-  names(inits) <- c("Intercept_PC","Intercept_SC","Intercept_LT",paste0("Beta1_",covariates_to_include))
-  
-  # --------------------------------
-  # Fit models
-  # --------------------------------
-  
-  #bru_options_set(inla.mode = "experimental")
-  bru_options_reset()
-  
-  # start <- Sys.time()
-  # fit_PConly <- bru(components = model_components,
-  #                   like_PC,
-  #                   options = list(
-  #                     control.inla = list(int.strategy = "eb"),
-  #                     bru_verbose = 4,
-  #                     bru_max_iter = 5,
-  #                     bru_initial = inits))
-  # end <- Sys.time()
-  # runtime_PConly <- difftime( end,start, units="mins") # 15 min
-  # 
-  start <- Sys.time()
-  fit_integrated <- bru(components = model_components,
-                        like_PC,like_SC,like_LT,
-                        options = list(
-                          control.inla = list(int.strategy = "eb"),
-                          bru_verbose = 4,
-                          bru_max_iter = 5,
-                          bru_initial = inits))
-  end <- Sys.time()
-  runtime_integrated <- difftime( end,start, units="mins") # 31 min with LT included
-  
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-  # PREDICTION SURFACES
+  # FIT MODELS AND GENERATE PREDICTION SURFACES
   # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+  
   
   pred_formula_PC = as.formula(paste0(' ~
 
@@ -694,12 +657,30 @@ for (sp_code in species_to_fit$Species){
   species_name = Sask_spcd$CommonName[which(Sask_spcd$spcd == sp_code)]
   species_label = Sask_spcd$Label[which(Sask_spcd$spcd == sp_code)]
   
-  # ********************************************************
-  # GENERATE PREDICTION SURFACE
-  # ********************************************************
   pred_grid_sp <- SaskGrid
+  nsamp = 500
   
-  nsamp = 100
+  bru_options_reset() # bru_options_set(inla.mode = "experimental")
+  
+  inits <- c(-5,-5,-5,rep(0,length(covariates_to_include))) %>% as.list()
+  names(inits) <- c("Intercept_PC","Intercept_SC","Intercept_LT",paste0("Beta1_",covariates_to_include))
+  
+  # -----------------------------
+  # Use only point count data
+  # -----------------------------
+  
+  start <- Sys.time()
+  fit_PConly <- bru(components = model_components,
+                    like_PC,
+                    options = list(
+                      control.inla = list(int.strategy = "eb"),
+                      bru_verbose = 4,
+                      bru_max_iter = 5,
+                      bru_initial = inits))
+  end <- Sys.time()
+  runtime_PConly <- difftime( end,start, units="mins") # 15 min
+  
+  
   pred_surface_PConly <- generate(fit_PConly,
                                   as(SaskGrid,'Spatial'),
                                   formula =  pred_formula_PC,
@@ -711,6 +692,21 @@ for (sp_code in species_to_fit$Species){
   pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
   pred_surface_PConly[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this
   pred_grid_sp$pred_PConly_med  <- pred_surface_PConly
+  
+  # -----------------------------
+  # Use checklists as well
+  # -----------------------------
+  
+  start <- Sys.time()
+  fit_integrated <- bru(components = model_components,
+                        like_PC,like_SC,like_LT,
+                        options = list(
+                          control.inla = list(int.strategy = "eb"),
+                          bru_verbose = 4,
+                          bru_max_iter = 5,
+                          bru_initial = inits))
+  end <- Sys.time()
+  runtime_integrated <- difftime( end,start, units="mins") # 31 min with LT included
   
   pred_surface_integrated <- generate(fit_integrated,
                                       as(SaskGrid,'Spatial'),
@@ -813,7 +809,7 @@ for (sp_code in species_to_fit$Species){
     
     # Also plot squares where species was observed in checklists
     #geom_sf(data = subset(SaskSquares_species,observed_CL > 0 & !is.na(observed_CL)),size=0.1,show.legend = F, col = "black", fill = "transparent")+
- 
+    
     coord_sf(clip = "off",xlim = c(min(SaskPoints$x), max(SaskPoints$x)))+
     theme(panel.background = element_blank(),panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
     theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())+
@@ -946,6 +942,48 @@ for (sp_code in species_to_fit$Species){
   
   save(surface_comparison, file = "../AOS_precision/output/surface_comparison_test4.RData")
   
+  # # ---------------------------------------------------
+  # # Visualize effect of effort covariates
+  # # ---------------------------------------------------
+  # 
+  # # *****
+  # # Stationary counts
+  # # *****
+  # SC_effort_df <- data.frame(effort = seq(min(SC_sf$effort),max(SC_sf$effort),length.out = 100))
+  # nsamp = 1000
+  # pred_SCeffort <- generate(fit_integrated,
+  #                           SC_effort_df,
+  #                           formula =  ~SC_effort,
+  #                           n.samples = nsamp)%>%
+  #   exp()
+  # 
+  # ggplot() +
+  #   geom_ribbon(aes(x = SC_effort_df$effort, 
+  #                   ymin = apply(pred_SCeffort,1,function(x)quantile(x,0.025)),
+  #                   ymax = apply(pred_SCeffort,1,function(x)quantile(x,0.975))),
+  #               alpha = 0.2)+
+  #   geom_line(aes(x = SC_effort_df$effort, y = apply(pred_SCeffort,1,median)))+
+  #   theme_bw()
+  #   
+  # # *****
+  # # Linear transects
+  # # *****
+  # LT_effort_df <- data.frame(effort = seq(min(LT_sf$effort),max(LT_sf$effort),length.out = 100))
+  # nsamp = 1000
+  # pred_LTeffort <- generate(fit_integrated,
+  #                           LT_effort_df,
+  #                           formula =  ~LT_effort,
+  #                           n.samples = nsamp)%>%
+  #   exp()
+  # 
+  # ggplot() +
+  #   geom_ribbon(aes(x = LT_effort_df$effort, 
+  #                   ymin = apply(pred_LTeffort,1,function(x)quantile(x,0.025)),
+  #                   ymax = apply(pred_LTeffort,1,function(x)quantile(x,0.975))),
+  #               alpha = 0.2)+
+  #   geom_line(aes(x = LT_effort_df$effort, y = apply(pred_LTeffort,1,median)))+
+  #   theme_bw()
+  # 
   rm(list = c("pred_grid_sp","pred_surface_integrated","pred_surface_PConly","fit_integrated","fit_PConly","raster_pred_surface_PConly","raster_pred_surface_integrated"))
   
 } # close species loop
