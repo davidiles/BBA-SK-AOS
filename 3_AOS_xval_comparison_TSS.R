@@ -675,7 +675,7 @@ for (fold in rev(sort(unique(SaskSquares$fold)))){
                       options = list(
                         control.inla = list(int.strategy = "eb"),
                         bru_verbose = 4,
-                        bru_max_iter = 2,
+                        bru_max_iter = 5,
                         bru_initial = inits))
     end <- Sys.time()
     runtime_PConly <- difftime( end,start, units="mins")
@@ -690,7 +690,7 @@ for (fold in rev(sort(unique(SaskSquares$fold)))){
                           options = list(
                             control.inla = list(int.strategy = "eb"),
                             bru_verbose = 4,
-                            bru_max_iter = 2,
+                            bru_max_iter = 5,
                             bru_initial = inits))
     end <- Sys.time()
     runtime_integrated <- difftime( end,start, units="mins") # 31 min with LT included
@@ -702,6 +702,7 @@ for (fold in rev(sort(unique(SaskSquares$fold)))){
     pred_formula_PC = as.formula(paste0(' ~
 
                   Intercept_PC +
+                  TSS +
                   spde_coarse +
                    ',
                                         paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
