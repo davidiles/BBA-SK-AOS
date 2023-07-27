@@ -35,7 +35,9 @@ rm(list=ls())
 # Import rasters, data, and covariates from "standard analysis"
 setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 # `%!in%` <- Negate(`%in%`)
+# 
 # 
 # # **************************************************************************************
 # # Functions for plotting
@@ -46,35 +48,35 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # # ------------------------------------------------
 # 
 # cut.fn <- function(df, column_name, lower_bound = NA, upper_bound = NA){
-#   
+# 
 #   max_val <- upper_bound
 #   max_val <- ifelse(is.na(max_val), 0, max_val)
-#   
-#   max_lev <- ifelse(max_val > 1.6, 4, 
+# 
+#   max_lev <- ifelse(max_val > 1.6, 4,
 #                     ifelse(max_val > 0.8, 4, 3))
-#   
+# 
 #   cut_levs <- signif(max_val/(2^((max_lev-1):0)), 2)
 #   cut_levs <- unique(cut_levs)
 #   cut_levs <- ifelse(is.na(cut_levs), 0, cut_levs)
-#   
+# 
 #   if (lower_bound %in% cut_levs) cut_levs <- cut_levs[-which(cut_levs == lower_bound)]
 #   if (lower_bound > min(cut_levs)) cut_levs = cut_levs[-which(cut_levs < lower_bound)]
-#   
+# 
 #   max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
-#   
+# 
 #   cut_levs_labs <- c(paste0("0-",lower_bound),
 #                      paste(lower_bound, cut_levs[1], sep="-"),
-#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
+#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"),
 #                      paste(cut_levs[max_lev], "+"))
-#   
+# 
 #   cut_levs <- c(-1, lower_bound, cut_levs, 1000) %>% unique()
-#   
+# 
 #   # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
 #   df$pc_cut <- cut(as.data.frame(df)[,column_name], cut_levs, labels=cut_levs_labs, ordered=TRUE)
-#   
+# 
 #   sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
 #   sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
-#   
+# 
 #   sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
 #   sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
 #   sp_abund_raster_data$layer[sp_abund_raster_data$layer==2] <- cut_levs_labs[2]
@@ -82,7 +84,7 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 #   sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
 #   sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
 #   sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
-#   
+# 
 #   sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
 #                                        levels= c(cut_levs_labs[1],cut_levs_labs[2],cut_levs_labs[3],
 #                                                  cut_levs_labs[4],cut_levs_labs[5],cut_levs_labs[6]),
@@ -92,28 +94,28 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # 
 # # Custom cut points
 # cut.fn2 <- function(df, column_name, cut_levs = cut_levs){
-#   
-#   
+# 
+# 
 #   lower_bound <- min(cut_levs)
 #   upper_bound <- max(cut_levs)
-#   
+# 
 #   max_lev <- length(cut_levs) ## do this because sometimes there are fewer levels
-#   
+# 
 #   cut_levs_labs <- c(paste0("0-",cut_levs[1]),
-#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"), 
+#                      paste(cut_levs[-max_lev], cut_levs[-1], sep="-"),
 #                      paste(cut_levs[max_lev], "+"))
-#   
+# 
 #   cut_levs <- c(-1, cut_levs, 1000) %>% unique()
-#   
+# 
 #   # ** MULTIPLY BY 15 FOR COMPARISON TO BSC
-#   df$pc_cut <- cut(as.data.frame(df)[,column_name], 
-#                    cut_levs, 
-#                    labels=cut_levs_labs, 
+#   df$pc_cut <- cut(as.data.frame(df)[,column_name],
+#                    cut_levs,
+#                    labels=cut_levs_labs,
 #                    ordered=TRUE)
-#   
+# 
 #   sp_abund_raster <- fasterize(df,SaskRaster,field = "pc_cut")
 #   sp_abund_raster <- mask(sp_abund_raster,SaskBoundary)
-#   
+# 
 #   sp_abund_raster_data <- as.data.frame(rasterToPoints(sp_abund_raster))
 #   for (i in unique(sp_abund_raster_data$layer)) sp_abund_raster_data$layer[sp_abund_raster_data$layer==i] <- cut_levs_labs[i]
 #   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==1] <- cut_levs_labs[1]
@@ -122,7 +124,7 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 #   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==4] <- cut_levs_labs[4]
 #   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==5] <- cut_levs_labs[5]
 #   # sp_abund_raster_data$layer[sp_abund_raster_data$layer==6] <- cut_levs_labs[6]
-#   # 
+#   #
 #   sp_abund_raster_data$layer <- factor(sp_abund_raster_data$layer,
 #                                        levels= cut_levs_labs,
 #                                        ordered = T)
@@ -243,13 +245,13 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 #   if(nchar(Name) > 13){
 #     if(countSpaces(Name)>0){
 #       Sask_spcd$Label[i] <- gsub(" "," \n",Name)
-#     } 
-#     
+#     }
+# 
 #   }
 #   else {
 #     Sask_spcd$Label[i] <- Sask_spcd$CommonName[i]
 #   }
-#   
+# 
 # }
 # 
 # # ------------------------------------------------
@@ -265,17 +267,17 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # # *************************************************************
 # 
 # # Load squares to withhold for crossvalidation
-# SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval_20km.shp") %>%
+# SaskSquares <- read_sf("../AOS_precision/output/SaskSquares_xval_50km.shp") %>%
 #   st_transform(crs(PC_surveyinfo))
 # SaskSquares$sq_idx <- as.numeric(factor(SaskSquares$SQUARE_ID))
 # SaskSquares_centroids <- st_centroid(SaskSquares)
 # 
 # # species_distribution_summary <- data.frame()
-# # 
+# #
 # # for (sp_code in colnames(PC_matrix)){
-# # 
+# #
 # #   if (sp_code %!in% colnames(DO_matrix)) next
-# # 
+# #
 # #   # point counts
 # #   PC_df <- data.frame(sp_code = sp_code,
 # #                       obs_index = PC_surveyinfo$obs_index,
@@ -287,7 +289,7 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # #                       sq_id = DO_surveyinfo$sq_id,
 # #                       ProtocolType = DO_surveyinfo$ProtocolType,
 # #                       count = DO_matrix[,sp_code])
-# # 
+# #
 # #   # Calculate presence/absence summaries within each atlas square
 # #   sq_summary_PC <- PC_df %>%
 # #     group_by(sp_code,sq_id) %>%
@@ -296,7 +298,7 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # #               count_mean_PC = mean(count),
 # #               count_max_PC = max(count)) %>%
 # #     mutate(presence_PC = count_sum_PC > 0)
-# # 
+# #
 # #   sq_summary_CL <- CL_df %>%
 # #     group_by(sp_code,sq_id) %>%
 # #     summarize(n_surveys_CL = n(),
@@ -304,11 +306,11 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # #               count_mean_CL = mean(count),
 # #               count_max_CL = max(count)) %>%
 # #     mutate(presence_CL = count_sum_CL > 0)
-# # 
+# #
 # #   # merge
 # #   sq_summary_sp <- full_join(sq_summary_PC,sq_summary_CL)
 # #   sq_summary_sp[is.na(sq_summary_sp)] <- 0
-# # 
+# #
 # #   species_distribution_summary <- rbind(species_distribution_summary,
 # #                                         data.frame(sp_code = sp_code,
 # #                                                    n_sq = sum((sq_summary_sp$presence_PC + sq_summary_sp$presence_CL)>0),
@@ -324,10 +326,10 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # # *************************************************************
 # # Select species for analysis
 # # *************************************************************
-# # 
+# #
 # # # Proportion of total that is CL only
 # # species_distribution_summary$prop_CLonly <- species_distribution_summary$n_CLonly/species_distribution_summary$n_sq
-# # 
+# #
 # # # Number of unique locations where species were detected
 # # species_relabund_PC <- colSums(PC_matrix>0,na.rm = TRUE) %>% sort(decreasing = TRUE) %>% as.data.frame() %>% rename(PC = 1)
 # # species_relabund_PC$Species <- rownames(species_relabund_PC)
@@ -335,7 +337,7 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # # species_relabund_DO$Species <- rownames(species_relabund_DO)
 # # species_relabund <- full_join(species_relabund_PC,species_relabund_DO)
 # # species_relabund <- na.omit(species_relabund)
-# # 
+# #
 # # species_relabund <- full_join(species_relabund,species_distribution_summary,
 # #                               by = c("Species" = "sp_code")) %>%
 # #   dplyr::relocate(Species)
@@ -344,10 +346,11 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 # load(file="../AOS_precision/output/species_relabund.RData")
 # 
 # # Only consider species detected in at least 100 squares
-# species_to_fit <- subset(species_relabund, 
-#                          n_PC > 100 & n_CL > 100 & n_sq >=250 & n_sq <= 500) %>%
+# species_to_fit <- subset(species_relabund,
+#                          n_PC > 100 & n_sq >=100) %>%
 #   arrange(desc(prop_CLonly))
 # 
+# species_to_fit <- sample_n(species_to_fit,20)
 # 
 # ggplot(species_to_fit, aes(x = n_PC, y = n_CL,label=Species, col = prop_CLonly))+
 #   geom_point()+
@@ -371,24 +374,21 @@ setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/"
 #   st_centroid() %>%
 #   st_intersection(.,SaskWater)
 # 
+# save.image("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp_50km.RData")
 
-
-
-#save.image("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp.RData")
-load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp.RData")
+load("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/output/wksp_50km.RData")
 
 surface_comparison <- data.frame()
-if (file.exists("../AOS_precision/output/surface_comparison.RData")){
-  load("../AOS_precision/output/surface_comparison.RData")
+if (file.exists("../AOS_precision/output/surface_comparison_TSS.RData")){
+  load("../AOS_precision/output/surface_comparison_TSS.RData")
 }
 
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
-#for (sp_code in species_to_fit$Species){
-for (sp_code in "YHBL"){
-  if (file.exists("../AOS_precision/output/surface_comparison.RData")){
-    load("../AOS_precision/output/surface_comparison.RData")
+for (sp_code in species_to_fit$Species){
+  if (file.exists("../AOS_precision/output/surface_comparison_TSS.RData")){
+    load("../AOS_precision/output/surface_comparison_TSS.RData")
   }
   
   # Check if this species/xval fold have already been run. If so, skip
@@ -446,6 +446,16 @@ for (sp_code in "YHBL"){
   # Intersect with SaskSquares dataframe
   PC_sf <- st_intersection(PC_sf, SaskSquares)
   CL_sf <- st_intersection(CL_sf, SaskSquares)
+  
+  # --------------------------------
+  # STANDARDIZE 'TIME SINCE SUNRISE' COVARIATE
+  # --------------------------------
+  
+  hss_mean <- mean(as.numeric(c(PC_sf$HSS,CL_sf$HSS)))
+  hss_sd <- sd(as.numeric(c(PC_sf$HSS,CL_sf$HSS)))
+  
+  PC_sf$TSS <- (as.numeric(PC_sf$HSS)-hss_mean)/hss_sd
+  CL_sf$TSS <- (as.numeric(CL_sf$HSS)-hss_mean)/hss_sd
   
   # --------------------------------
   # DEFINE SQUARE-DAY COVARIATE
@@ -534,6 +544,16 @@ for (sp_code in "YHBL"){
   kappa_prec <- list(prior = "pcprec", param = c(1,0.1))
   
   # --------------------------------
+  # Create mesh to model effect of time since sunrise (TSS)
+  # --------------------------------
+  TSS_range <- range(c(PC_sf$TSS,CL_sf$TSS))
+  TSS_meshpoints <- seq(TSS_range[1]-0.1,TSS_range[2]+0.1,length.out = 11)
+  TSS_mesh1D = inla.mesh.1d(TSS_meshpoints,boundary="free")
+  TSS_spde = inla.spde2.pcmatern(TSS_mesh1D,
+                                 prior.range = c(1,0.5), 
+                                 prior.sigma = c(2,0.1)) # 10% chance sd is larger than 2
+  
+  # --------------------------------
   # Create mesh to model effect of checklist duration
   # --------------------------------
   # 
@@ -559,6 +579,7 @@ for (sp_code in "YHBL"){
   Intercept_PC(1)+
   Intercept_SC(1)+
   Intercept_LT(1)+
+  TSS(main = TSS,model = TSS_spde) +
   kappa_surveyID(surveyID, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
   kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
   kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
@@ -566,6 +587,7 @@ for (sp_code in "YHBL"){
   
   SC_effort(main = effort,model = SC_effort_spde) +
   LT_effort(main = effort,model = LT_effort_spde) +
+  
   
   
   ',
@@ -579,8 +601,13 @@ for (sp_code in "YHBL"){
   # Model formulas
   # --------------------------------
   
+  # --------------------------------
+  # Model formulas
+  # --------------------------------
+  
   model_formula_PC = as.formula(paste0('count ~
                   Intercept_PC +
+                  TSS +
                   kappa_surveyID +
                   kappa_squareID +
                   kappa_squareday +
@@ -591,6 +618,7 @@ for (sp_code in "YHBL"){
   model_formula_SC = as.formula(paste0('presence ~ log(1/exp(-exp(
 
                   Intercept_SC +
+                  TSS +
                   kappa_squareID +
                   kappa_squareday +
                   spde_coarse +
@@ -602,10 +630,11 @@ for (sp_code in "YHBL"){
   model_formula_LT = as.formula(paste0('presence ~ log(1/exp(-exp(
 
                   Intercept_LT +
+                  TSS +
                   kappa_squareID +
                   kappa_squareday +
                   spde_coarse +
-                  LT_effort+
+                  LT_effort +
                                        ',
                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + "),
                                        "))-1)"))
@@ -660,18 +689,17 @@ for (sp_code in "YHBL"){
                       bru_max_iter = 5,
                       bru_initial = inits))
   end <- Sys.time()
-  runtime_PConly <- difftime( end,start, units="mins") # 15 min
+  runtime_PConly <- difftime( end,start, units="mins")
   
   
   pred_surface_PConly <- generate(fit_PConly,
                                   as(SaskGrid,'Spatial'),
                                   formula =  pred_formula_PC,
                                   n.samples = nsamp) %>%
-    apply(.,1,median) %>%
-    exp()
+    apply(.,1,median) 
   
   # Add lognormal variance correction
-  pred_surface_PConly <- pred_surface_PConly * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]) * exp(0.5*1/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
+  pred_surface_PConly <- exp(pred_surface_PConly + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4] + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
   pred_surface_PConly[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this
   pred_grid_sp$pred_PConly_med  <- pred_surface_PConly
   
@@ -688,17 +716,16 @@ for (sp_code in "YHBL"){
                           bru_max_iter = 5,
                           bru_initial = inits))
   end <- Sys.time()
-  runtime_integrated <- difftime( end,start, units="mins") # 31 min with LT included
+  runtime_integrated <- difftime( end,start, units="mins")
   
   pred_surface_integrated <- generate(fit_integrated,
                                       as(SaskGrid,'Spatial'),
                                       formula =  pred_formula_PC,
                                       n.samples = nsamp)%>%
-    apply(.,1,median) %>%
-    exp()
+    apply(.,1,median)
   
   # Add lognormal variance correction
-  pred_surface_integrated <- pred_surface_integrated  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4]) * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4])  * exp(0.5*1/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
+  pred_surface_integrated <- exp(pred_surface_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
   pred_surface_integrated[Water_centroids$pointid] <- NA # Trim out pixels that have centroids in open water (Note: probably a better way to do this)
   pred_grid_sp$pred_integrated_med  <- pred_surface_integrated
   
@@ -907,8 +934,8 @@ for (sp_code in "YHBL"){
   # Save results
   # -------------------------------------------------------
   
-  if (file.exists("../AOS_precision/output/surface_comparison.RData")){
-    load("../AOS_precision/output/surface_comparison.RData")
+  if (file.exists("../AOS_precision/output/surface_comparison_TSS.RData")){
+    load("../AOS_precision/output/surface_comparison_TSS.RData")
   }
   
   surface_comparison <- rbind(surface_comparison,
@@ -922,7 +949,7 @@ for (sp_code in "YHBL"){
                                          runtime_integrated = runtime_integrated
                               ))
   
-  save(surface_comparison, file = "../AOS_precision/output/surface_comparison.RData")
+  save(surface_comparison, file = "../AOS_precision/output/surface_comparison_TSS.RData")
   
   # # ---------------------------------------------------
   # # Visualize effect of effort covariates
