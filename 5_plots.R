@@ -36,25 +36,25 @@ rm(list=ls())
 setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
-load("../AOS_precision/output/xval_df_50km.RData")
+load("../AOS_precision/output/xval_df_50km_TSS.RData")
 
-xval_df_50km <- xval_df_50km %>%
+xval_df_50km_TSS <- xval_df_50km_TSS %>%
   group_by(Species) %>%
-  summarize_all(mean)
+  summarize_all(mean) 
 
-xval_df_50km$n_obs_CL <- xval_df_50km$n_obs_SC + xval_df_50km$n_obs_LT + xval_df_50km$n_obs_BBA
-xval_df_50km$delta_cor <- xval_df_50km$cor_integrated - xval_df_50km$cor_PConly
-xval_df_50km$delta_MSE <- xval_df_50km$MSE_integrated - xval_df_50km$MSE_PConly
-xval_df_50km$delta_AUC <- xval_df_50km$AUC_integrated - xval_df_50km$AUC_PConly
+xval_df_50km_TSS$n_obs_CL <- xval_df_50km_TSS$n_obs_SC + xval_df_50km_TSS$n_obs_LT + xval_df_50km_TSS$n_obs_BBA
+xval_df_50km_TSS$delta_cor <- xval_df_50km_TSS$cor_integrated - xval_df_50km_TSS$cor_PConly
+xval_df_50km_TSS$delta_MSE <- xval_df_50km_TSS$MSE_integrated - xval_df_50km_TSS$MSE_PConly
+xval_df_50km_TSS$delta_AUC <- xval_df_50km_TSS$AUC_integrated - xval_df_50km_TSS$AUC_PConly
 
-mean(xval_df_50km$delta_cor>0)
-mean(xval_df_50km$delta_AUC>0)
-mean(xval_df_50km$delta_MSE<0)
+mean(xval_df_50km_TSS$delta_cor>0)
+mean(xval_df_50km_TSS$delta_AUC>0)
+mean(xval_df_50km_TSS$delta_MSE<0)
 
 ggplot()+
-  geom_text(data = xval_df_50km, aes(x = n_obs_PC, 
+  geom_text(data = xval_df_50km_TSS, aes(x = n_obs_PC, 
                                 y = cor_integrated + sign(delta_cor)*0.01, label = Species,col = delta_cor > 0))+
-  geom_segment(data = xval_df_50km, aes(x = n_obs_PC,xend = n_obs_PC, 
+  geom_segment(data = xval_df_50km_TSS, aes(x = n_obs_PC,xend = n_obs_PC, 
                                    y = (cor_PConly ),yend = cor_integrated, col = delta_cor > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -65,9 +65,9 @@ ggplot()+
   theme_bw()
 
 ggplot()+
-  geom_text(data = xval_df_50km, aes(x = n_obs_PC, 
+  geom_text(data = xval_df_50km_TSS, aes(x = n_obs_PC, 
                                 y = AUC_integrated + sign(delta_AUC)*0.01, label = Species,col = delta_AUC > 0))+
-  geom_segment(data = xval_df_50km, aes(x = n_obs_PC,xend = n_obs_PC, 
+  geom_segment(data = xval_df_50km_TSS, aes(x = n_obs_PC,xend = n_obs_PC, 
                                    y = (AUC_PConly ),yend = AUC_integrated, col = delta_AUC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -78,9 +78,9 @@ ggplot()+
   theme_bw()
 
 ggplot()+
-  geom_text(data = xval_df_50km, aes(x = n_obs_PC, 
+  geom_text(data = xval_df_50km_TSS, aes(x = n_obs_PC, 
                                 y = MSE_integrated + sign(delta_MSE)*MSE_integrated*0.2, label = Species,col = delta_MSE < 0))+
-  geom_segment(data = xval_df_50km, aes(x = n_obs_PC,xend = n_obs_PC, 
+  geom_segment(data = xval_df_50km_TSS, aes(x = n_obs_PC,xend = n_obs_PC, 
                                    y = MSE_PConly,yend = MSE_integrated, col = delta_MSE < 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -94,15 +94,15 @@ ggplot()+
 # Examine results across each cross-validation fold
 # -----------------------------------------------------------
 
-load("../AOS_precision/output/xval_df_50km.RData")
+load("../AOS_precision/output/xval_df_50km_TSS.RData")
 
-xval_df_50km$n_obs_CL <- xval_df_50km$n_obs_SC + xval_df_50km$n_obs_LT + xval_df_50km$n_obs_BBA
-xval_df_50km$delta_cor <- xval_df_50km$cor_integrated - xval_df_50km$cor_PConly
-xval_df_50km$delta_MSE <- xval_df_50km$MSE_integrated - xval_df_50km$MSE_PConly
-xval_df_50km$delta_AUC <- xval_df_50km$AUC_integrated - xval_df_50km$AUC_PConly
+xval_df_50km_TSS$n_obs_CL <- xval_df_50km_TSS$n_obs_SC + xval_df_50km_TSS$n_obs_LT + xval_df_50km_TSS$n_obs_BBA
+xval_df_50km_TSS$delta_cor <- xval_df_50km_TSS$cor_integrated - xval_df_50km_TSS$cor_PConly
+xval_df_50km_TSS$delta_MSE <- xval_df_50km_TSS$MSE_integrated - xval_df_50km_TSS$MSE_PConly
+xval_df_50km_TSS$delta_AUC <- xval_df_50km_TSS$AUC_integrated - xval_df_50km_TSS$AUC_PConly
 
 ggplot()+
-  geom_segment(data = xval_df_50km, aes(x = xval_fold,xend = xval_fold,
+  geom_segment(data = xval_df_50km_TSS, aes(x = xval_fold,xend = xval_fold,
                                    y = (cor_PConly ),yend = cor_integrated, col = delta_cor > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -114,7 +114,7 @@ ggplot()+
   facet_wrap(Species~.)
 
 ggplot()+
-  geom_segment(data = xval_df_50km, aes(x = xval_fold,xend = xval_fold, 
+  geom_segment(data = xval_df_50km_TSS, aes(x = xval_fold,xend = xval_fold, 
                                    y = (AUC_PConly ),yend = AUC_integrated, col = delta_AUC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -126,7 +126,7 @@ ggplot()+
   facet_wrap(Species~.)
 
 ggplot()+
-  geom_segment(data = xval_df_50km, aes(x = xval_fold,xend = xval_fold, 
+  geom_segment(data = xval_df_50km_TSS, aes(x = xval_fold,xend = xval_fold, 
                                    y = (MSE_PConly ),yend = MSE_integrated, col = delta_MSE < 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
