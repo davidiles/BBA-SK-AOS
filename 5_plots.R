@@ -33,16 +33,22 @@ library(napops) # For detectability offsets  # devtools::install_github("na-pops
 rm(list=ls())
 
 # Import rasters, data, and covariates from "standard analysis"
-setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
+setwd("F:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
 load("../AOS_precision/output/xval_df_50km_TSS.RData")
 
+nfolds <- xval_df_50km_TSS %>%
+  group_by(Species) %>%
+  summarize(nfold = n()) %>%
+  subset(nfold >= 4)
+
 xval_df_50km_TSS <- xval_df_50km_TSS %>%
   group_by(Species) %>%
-  summarize_all(mean) 
+  summarize_all(mean) %>%
+  subset(Species %in% nfolds$Species)
 
-xval_df_50km_TSS$n_obs_CL <- xval_df_50km_TSS$n_obs_SC + xval_df_50km_TSS$n_obs_LT + xval_df_50km_TSS$n_obs_BBA
+xval_df_50km_TSS$n_obs_CL <- xval_df_50km_TSS$n_obs_SC + xval_df_50km_TSS$n_obs_LT
 xval_df_50km_TSS$delta_cor <- xval_df_50km_TSS$cor_integrated - xval_df_50km_TSS$cor_PConly
 xval_df_50km_TSS$delta_MSE <- xval_df_50km_TSS$MSE_integrated - xval_df_50km_TSS$MSE_PConly
 xval_df_50km_TSS$delta_AUC <- xval_df_50km_TSS$AUC_integrated - xval_df_50km_TSS$AUC_PConly
