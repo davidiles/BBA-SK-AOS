@@ -134,7 +134,7 @@ end <- Sys.time()
 
 # Hours since sunrise
 PC_surveyinfo$HSS <- with(PC_surveyinfo, difftime(Time,Sunrise,units="hours") )
-PC_surveyinfo <- subset(PC_surveyinfo, HSS >= -0.5 & HSS <= 4)
+#PC_surveyinfo <- subset(PC_surveyinfo, HSS >= -0.5 & HSS <= 4)
 
 # ---------------------------------------------------------
 # Create matrix of species counts (each row corresponds to one in PC_surveyinfo)
@@ -261,7 +261,8 @@ end <- Sys.time()
 
 # Hours since sunrise
 DO_surveyinfo$HSS <- with(DO_surveyinfo, difftime(Time,Sunrise,units="hours") )
-DO_surveyinfo <- subset(DO_surveyinfo, HSS >= -0.5 & HSS <= 4)
+
+#DO_surveyinfo <- subset(DO_surveyinfo, HSS >= -0.5 & HSS <= 4)
 
 # ---------------------------------------------------------
 # Create matrix of species counts (each row corresponds to one in DO_surveyinfo)
