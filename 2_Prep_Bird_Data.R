@@ -89,21 +89,15 @@ PC_surveyinfo <- PCData %>%
   rename(sq_id = SiteCode) %>%
   st_as_sf(.,coords = c("longitude","latitude"), crs = CRS("+init=epsg:4326"), remove = FALSE)
 
-
-# &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-# ONLY SELECT SURVEYS IN APPROPRIATE DATE AND TIME RANGE
-# &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-
 # ------------------------------------------------
-# RESTRICT DATES OF SURVEYS TO BETWEEN MAY 31 AND JULY 7
+# ORDINAL DAY OF EACH SURVEY
 # ------------------------------------------------
 
 PC_surveyinfo$Date <- lubridate::ymd(PC_surveyinfo$ObservationDate)
 PC_surveyinfo$yday <- lubridate::ymd(PC_surveyinfo$ObservationDate) %>% yday()
-#PC_surveyinfo <- subset(PC_surveyinfo, yday >= start_date & yday <= end_date)
 
 # ------------------------------------------------
-# RESTRICT TIMES OF SURVEYS TO WITHIN 4 HOURS OF SUNRISE
+# CALCULATE HOURS SINCE SUNRISE COVARIATE
 # ------------------------------------------------
 
 PC_surveyinfo$Hours <- floor(PC_surveyinfo$TimeCollected)
@@ -129,7 +123,6 @@ end <- Sys.time()
 
 # Hours since sunrise
 PC_surveyinfo$HSS <- with(PC_surveyinfo, difftime(Time,Sunrise,units="hours") )
-#PC_surveyinfo <- subset(PC_surveyinfo, HSS >= -0.5 & HSS <= 4)
 
 # ---------------------------------------------------------
 # Create matrix of species counts (each row corresponds to one in PC_surveyinfo)
@@ -145,7 +138,6 @@ for (i in 1:nrow(PCData)){
 
 # Remove columns (species) that were never observed to save storage space
 PC_matrix <- PC_matrix[,-which(colSums(PC_matrix)==0)]
-
 
 
 # ************************************************************
@@ -217,17 +209,12 @@ DO_surveyinfo <- DOData %>%
   ungroup()
 
 
-# &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-# ONLY SELECT SURVEYS IN APPROPRIATE DATE AND TIME RANGE
-# &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
-
 # ------------------------------------------------
-# RESTRICT DATES OF SURVEYS TO BETWEEN MAY 31 AND JULY 7
+# ORDINAL DATE OF EACH SURVEY
 # ------------------------------------------------
 
 DO_surveyinfo$Date <- lubridate::ymd(DO_surveyinfo$ObservationDate)
 DO_surveyinfo$yday <- lubridate::ymd(DO_surveyinfo$ObservationDate) %>% yday()
-#DO_surveyinfo <- subset(DO_surveyinfo, yday >= start_date & yday <= end_date)
 
 # ------------------------------------------------
 # RESTRICT TIMES OF SURVEYS TO WITHIN 4 HOURS OF SUNRISE
@@ -256,8 +243,6 @@ end <- Sys.time()
 
 # Hours since sunrise
 DO_surveyinfo$HSS <- with(DO_surveyinfo, difftime(Time,Sunrise,units="hours") )
-
-#DO_surveyinfo <- subset(DO_surveyinfo, HSS >= -0.5 & HSS <= 4)
 
 # ---------------------------------------------------------
 # Create matrix of species counts (each row corresponds to one in DO_surveyinfo)
