@@ -22,11 +22,6 @@ rm(list=ls())
 setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
-
-# Acceptable days of year for surveys
-start_date <- lubridate::ymd("2022-05-31") %>% yday()
-end_date <- lubridate::ymd("2022-07-07") %>% yday()
-
 # NOTE: Surveys will only be included if they were conducted 30 min before sunrise to 4 hours after sunrise
 
 # ------------------------------------------------------------
@@ -105,7 +100,7 @@ PC_surveyinfo <- PCData %>%
 
 PC_surveyinfo$Date <- lubridate::ymd(PC_surveyinfo$ObservationDate)
 PC_surveyinfo$yday <- lubridate::ymd(PC_surveyinfo$ObservationDate) %>% yday()
-PC_surveyinfo <- subset(PC_surveyinfo, yday >= start_date & yday <= end_date)
+#PC_surveyinfo <- subset(PC_surveyinfo, yday >= start_date & yday <= end_date)
 
 # ------------------------------------------------
 # RESTRICT TIMES OF SURVEYS TO WITHIN 4 HOURS OF SUNRISE
@@ -232,7 +227,7 @@ DO_surveyinfo <- DOData %>%
 
 DO_surveyinfo$Date <- lubridate::ymd(DO_surveyinfo$ObservationDate)
 DO_surveyinfo$yday <- lubridate::ymd(DO_surveyinfo$ObservationDate) %>% yday()
-DO_surveyinfo <- subset(DO_surveyinfo, yday >= start_date & yday <= end_date)
+#DO_surveyinfo <- subset(DO_surveyinfo, yday >= start_date & yday <= end_date)
 
 # ------------------------------------------------
 # RESTRICT TIMES OF SURVEYS TO WITHIN 4 HOURS OF SUNRISE
@@ -333,5 +328,5 @@ Checklist_data <- list(DO_surveyinfo = DO_surveyinfo,
 # Save
 # ---------------------------------------------------------
 
-save(Pointcount_data,file = "D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data.RData")
-save(Checklist_data,file = "D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data.RData")
+save(Pointcount_data,file = "D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Pointcount_data_2.RData")
+save(Checklist_data,file = "D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/data/Checklist_data_2.RData")
