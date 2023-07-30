@@ -33,23 +33,23 @@ library(napops) # For detectability offsets  # devtools::install_github("na-pops
 rm(list=ls())
 
 # Import rasters, data, and covariates from "standard analysis"
-setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
+setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/script")
 `%!in%` <- Negate(`%in%`)
 
-load("../AOS_precision/output/xval_TYPE2_df_50km_TSS_2.RData")
+load("../output/xval_PC_CL.RData")
 
-xval_TYPE2_df_50km_TSS <- xval_TYPE2_df_50km_TSS %>%
-  group_by(Species) %>%
-  summarize_all(mean) 
+# xval_PC_CL <- xval_PC_CL %>%
+#   group_by(Species) %>%
+#   summarize_all(mean) 
 
 # -----------------------------------
 # Cross-validation of POINT COUNT data
 # -----------------------------------
 
-xval_TYPE2_df_50km_TSS$delta_cor_PC <- xval_TYPE2_df_50km_TSS$cor_PC_integrated - xval_TYPE2_df_50km_TSS$cor_PC_PConly
-lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_cor_PC))
+xval_PC_CL$delta_cor_PC <- xval_PC_CL$cor_PC_integrated - xval_PC_CL$cor_PC_PConly
+lim <- max(abs(xval_PC_CL$delta_cor_PC))
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_cor_PC, 
+  geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_cor_PC, 
                                                   y = Species,yend = Species, col = delta_cor_PC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -60,12 +60,13 @@ ggplot()+
   xlab("Change in Correlation")+
   scale_x_continuous(limits = c(-lim,lim))+
   theme_bw()+
-  ggtitle("PC vs Integrated\n\nCorrelation with validation data")
+  ggtitle("PC vs Integrated\n\nCorrelation with validation data")+
+  facet_grid(.~xval_fold)
 
-xval_TYPE2_df_50km_TSS$delta_AUC_PC <- xval_TYPE2_df_50km_TSS$AUC_PC_integrated - xval_TYPE2_df_50km_TSS$AUC_PC_PConly
-lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_AUC_PC))
+xval_PC_CL$delta_AUC_PC <- xval_PC_CL$AUC_PC_integrated - xval_PC_CL$AUC_PC_PConly
+lim <- max(abs(xval_PC_CL$delta_AUC_PC))
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_AUC_PC, 
+  geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_AUC_PC, 
                                                   y = Species,yend = Species, col = delta_AUC_PC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -76,12 +77,13 @@ ggplot()+
   xlab("Change in AUC")+
   scale_x_continuous(limits = c(-lim,lim))+
   theme_bw()+
-  ggtitle("PC vs Integrated\n\nAUC (presence/absence predictions)")
+  ggtitle("PC vs Integrated\n\nAUC (presence/absence predictions)")+
+  facet_grid(.~xval_fold)
 
-xval_TYPE2_df_50km_TSS$delta_MSE_PC <- xval_TYPE2_df_50km_TSS$MSE_PC_integrated - xval_TYPE2_df_50km_TSS$MSE_PC_PConly
-lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_MSE_PC))
+xval_PC_CL$delta_MSE_PC <- xval_PC_CL$MSE_PC_integrated - xval_PC_CL$MSE_PC_PConly
+lim <- max(abs(xval_PC_CL$delta_MSE_PC))
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_MSE_PC, 
+  geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_MSE_PC, 
                                                   y = Species,yend = Species, col = delta_MSE_PC < 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -92,17 +94,18 @@ ggplot()+
   xlab("Change in MSE")+
   scale_x_continuous(limits = c(-lim,lim))+
   theme_bw()+
-  ggtitle("PC vs Integrated\n\nMSE with validation data")
+  ggtitle("PC vs Integrated\n\nMSE with validation data")+
+  facet_grid(.~xval_fold)
 
 
 # -----------------------------------
 # Cross-validation of STATIONARY COUNT checklist data
 # -----------------------------------
 # 
-# xval_TYPE2_df_50km_TSS$delta_cor_SC <- xval_TYPE2_df_50km_TSS$cor_SC_integrated - xval_TYPE2_df_50km_TSS$cor_SC_CLonly
-# lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_cor_SC))
+# xval_PC_CL$delta_cor_SC <- xval_PC_CL$cor_SC_integrated - xval_PC_CL$cor_SC_CLonly
+# lim <- max(abs(xval_PC_CL$delta_cor_SC))
 # ggplot()+
-#   geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_cor_SC, 
+#   geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_cor_SC, 
 #                                                   y = Species,yend = Species, col = delta_cor_SC > 0),
 #                size = 2,
 #                arrow = arrow(length = unit(0.05, "inches")))+
@@ -115,10 +118,10 @@ ggplot()+
 #   theme_bw()+
 #   ggtitle("SC vs Integrated\n\nCorrelation with validation data")
 
-xval_TYPE2_df_50km_TSS$delta_AUC_SC <- xval_TYPE2_df_50km_TSS$AUC_SC_integrated - xval_TYPE2_df_50km_TSS$AUC_SC_CLonly
-lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_AUC_SC))
+xval_PC_CL$delta_AUC_SC <- xval_PC_CL$AUC_SC_integrated - xval_PC_CL$AUC_SC_CLonly
+lim <- max(abs(xval_PC_CL$delta_AUC_SC))
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_AUC_SC, 
+  geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_AUC_SC, 
                                                   y = Species,yend = Species, col = delta_AUC_SC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -131,10 +134,10 @@ ggplot()+
   theme_bw()+
   ggtitle("SC vs Integrated\n\nAUC (presence/absence predictions)")
 
-# xval_TYPE2_df_50km_TSS$delta_MSE_SC <- xval_TYPE2_df_50km_TSS$MSE_SC_integrated - xval_TYPE2_df_50km_TSS$MSE_SC_CLonly
-# lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_MSE_SC))
+# xval_PC_CL$delta_MSE_SC <- xval_PC_CL$MSE_SC_integrated - xval_PC_CL$MSE_SC_CLonly
+# lim <- max(abs(xval_PC_CL$delta_MSE_SC))
 # ggplot()+
-#   geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_MSE_SC, 
+#   geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_MSE_SC, 
 #                                                   y = Species,yend = Species, col = delta_MSE_SC < 0),
 #                size = 2,
 #                arrow = arrow(length = unit(0.05, "inches")))+
@@ -151,10 +154,10 @@ ggplot()+
 # Cross-validation of LINEAR TRANSECT checklist data
 # -----------------------------------
 # 
-# xval_TYPE2_df_50km_TSS$delta_cor_LT <- xval_TYPE2_df_50km_TSS$cor_LT_integrated - xval_TYPE2_df_50km_TSS$cor_LT_CLonly
-# lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_cor_LT))
+# xval_PC_CL$delta_cor_LT <- xval_PC_CL$cor_LT_integrated - xval_PC_CL$cor_LT_CLonly
+# lim <- max(abs(xval_PC_CL$delta_cor_LT))
 # ggplot()+
-#   geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_cor_LT, 
+#   geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_cor_LT, 
 #                                                   y = Species,yend = Species, col = delta_cor_LT > 0),
 #                size = 2,
 #                arrow = arrow(length = unit(0.05, "inches")))+
@@ -167,10 +170,10 @@ ggplot()+
 #   theme_bw()+
 #   ggtitle("LT vs Integrated\n\nCorrelation with validation data")
 
-xval_TYPE2_df_50km_TSS$delta_AUC_LT <- xval_TYPE2_df_50km_TSS$AUC_LT_integrated - xval_TYPE2_df_50km_TSS$AUC_LT_CLonly
-lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_AUC_LT))
+xval_PC_CL$delta_AUC_LT <- xval_PC_CL$AUC_LT_integrated - xval_PC_CL$AUC_LT_CLonly
+lim <- max(abs(xval_PC_CL$delta_AUC_LT))
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_AUC_LT, 
+  geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_AUC_LT, 
                                                   y = Species,yend = Species, col = delta_AUC_LT > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -183,10 +186,10 @@ ggplot()+
   theme_bw()+
   ggtitle("LT vs Integrated\n\nAUC (presence/absence predictions)")
 
-# xval_TYPE2_df_50km_TSS$delta_MSE_LT <- xval_TYPE2_df_50km_TSS$MSE_LT_integrated - xval_TYPE2_df_50km_TSS$MSE_LT_CLonly
-# lim <- max(abs(xval_TYPE2_df_50km_TSS$delta_MSE_LT))
+# xval_PC_CL$delta_MSE_LT <- xval_PC_CL$MSE_LT_integrated - xval_PC_CL$MSE_LT_CLonly
+# lim <- max(abs(xval_PC_CL$delta_MSE_LT))
 # ggplot()+
-#   geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = 0,xend = delta_MSE_LT, 
+#   geom_segment(data = xval_PC_CL, aes(x = 0,xend = delta_MSE_LT, 
 #                                                   y = Species,yend = Species, col = delta_MSE_LT < 0),
 #                size = 2,
 #                arrow = arrow(length = unit(0.05, "inches")))+
@@ -204,15 +207,15 @@ ggplot()+
 # Examine results across each cross-validation fold
 # -----------------------------------------------------------
 
-load("../AOS_precision/output/xval_TYPE2_df_50km_TSS.RData")
+load("../AOS_precision/output/xval_PC_CL.RData")
 
-xval_TYPE2_df_50km_TSS$n_obs_CL <- xval_TYPE2_df_50km_TSS$n_obs_SC + xval_TYPE2_df_50km_TSS$n_obs_LT + xval_TYPE2_df_50km_TSS$n_obs_BBA
-xval_TYPE2_df_50km_TSS$delta_cor <- xval_TYPE2_df_50km_TSS$cor_integrated - xval_TYPE2_df_50km_TSS$cor_PConly
-xval_TYPE2_df_50km_TSS$delta_MSE <- xval_TYPE2_df_50km_TSS$MSE_integrated - xval_TYPE2_df_50km_TSS$MSE_PConly
-xval_TYPE2_df_50km_TSS$delta_AUC <- xval_TYPE2_df_50km_TSS$AUC_integrated - xval_TYPE2_df_50km_TSS$AUC_PConly
+xval_PC_CL$n_obs_CL <- xval_PC_CL$n_obs_SC + xval_PC_CL$n_obs_LT + xval_PC_CL$n_obs_BBA
+xval_PC_CL$delta_cor <- xval_PC_CL$cor_integrated - xval_PC_CL$cor_PConly
+xval_PC_CL$delta_MSE <- xval_PC_CL$MSE_integrated - xval_PC_CL$MSE_PConly
+xval_PC_CL$delta_AUC <- xval_PC_CL$AUC_integrated - xval_PC_CL$AUC_PConly
 
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = xval_fold,xend = xval_fold,
+  geom_segment(data = xval_PC_CL, aes(x = xval_fold,xend = xval_fold,
                                    y = (cor_PConly ),yend = cor_integrated, col = delta_cor > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -224,7 +227,7 @@ ggplot()+
   facet_wrap(Species~.)
 
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = xval_fold,xend = xval_fold, 
+  geom_segment(data = xval_PC_CL, aes(x = xval_fold,xend = xval_fold, 
                                    y = (AUC_PConly ),yend = AUC_integrated, col = delta_AUC > 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
@@ -236,7 +239,7 @@ ggplot()+
   facet_wrap(Species~.)
 
 ggplot()+
-  geom_segment(data = xval_TYPE2_df_50km_TSS, aes(x = xval_fold,xend = xval_fold, 
+  geom_segment(data = xval_PC_CL, aes(x = xval_fold,xend = xval_fold, 
                                    y = (MSE_PConly ),yend = MSE_integrated, col = delta_MSE < 0),
                size = 2,
                arrow = arrow(length = unit(0.05, "inches")))+
