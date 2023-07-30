@@ -36,7 +36,7 @@ rm(list=ls())
 setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/Standard_Analysis/")
 `%!in%` <- Negate(`%in%`)
 
-load("../AOS_precision/output/xval_TYPE2_df_50km_TSS.RData")
+load("../AOS_precision/output/xval_TYPE2_df_50km_TSS_2.RData")
 
 xval_TYPE2_df_50km_TSS <- xval_TYPE2_df_50km_TSS %>%
   group_by(Species) %>%
