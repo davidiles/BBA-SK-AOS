@@ -137,7 +137,7 @@ end_date <- lubridate::ymd("2022-07-15") %>% yday()
 SC_to_use <- subset(DO_surveyinfo,
                     ProtocolType == "Stationary count" & 
                       HSS >= -1 &
-                      HSS <= 12 &
+                      HSS <= 6 &
                       yday >= start_date &
                       yday <= end_date &
                       DurationInHours <= 1)
@@ -146,7 +146,7 @@ SC_to_use <- subset(DO_surveyinfo,
 LT_to_use <- subset(DO_surveyinfo,
                     ProtocolType == "Linear transect" & 
                       HSS >= -1 &
-                      HSS <= 12 &
+                      HSS <= 6 &
                       yday >= start_date &
                       yday <= end_date &
                       DurationInHours > (10/60) &
@@ -191,6 +191,8 @@ mean <- mean(PC_surveyinfo$Water_5km,na.rm = TRUE) ; sd <- sd(PC_surveyinfo$Wate
 PC_surveyinfo$Water_5km <- (PC_surveyinfo$Water_5km - mean)/sd
 DO_surveyinfo$Water_5km <- (DO_surveyinfo$Water_5km - mean)/sd
 SaskGrid$Water_5km <- (SaskGrid$Water_5km - mean)/sd
+
+rm(mean)
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -257,27 +259,27 @@ species_distribution_summary$prop_PC <- species_distribution_summary$n_PC/specie
 # Restrict to species detected in at least 25 squares
 species_distribution_summary <- subset(species_distribution_summary,
                                        n_PC >= 25 & n_CL >= 25)
-ggplot(species_distribution_summary, aes(x = n_PC, y = n_CL,label=sp_code, col = prop_PC))+
-  geom_point()+
-  geom_text_repel()+
-  scale_color_gradientn(colors = viridis(10))+
-  scale_x_continuous(trans = "log10")+
-  scale_y_continuous(trans = "log10")+
-  theme_bw()
+# ggplot(species_distribution_summary, aes(x = n_PC, y = n_CL,label=sp_code, col = prop_PC))+
+#   geom_point()+
+#   geom_text_repel()+
+#   scale_color_gradientn(colors = viridis(10))+
+#   scale_x_continuous(trans = "log10")+
+#   scale_y_continuous(trans = "log10")+
+#   theme_bw()
 
 # *************************************************************
 # Select species for analysis
 # *************************************************************
-set.seed(999)
-species_to_fit <- sample_n(species_distribution_summary,20)
-
-ggplot(species_to_fit, aes(x = n_PC, y = n_CL,label=sp_code, col = prop_PC))+
-  geom_point()+
-  geom_text_repel()+
-  scale_color_gradientn(colors = viridis(10),
-                        trans = "log10")+
-  scale_x_continuous(trans = "log10")+
-  scale_y_continuous(trans = "log10")+
-  theme_bw()
+# set.seed(999)
+# species_to_fit <- sample_n(species_distribution_summary,20)
+# 
+# ggplot(species_to_fit, aes(x = n_PC, y = n_CL,label=sp_code, col = prop_PC))+
+#   geom_point()+
+#   geom_text_repel()+
+#   scale_color_gradientn(colors = viridis(10),
+#                         trans = "log10")+
+#   scale_x_continuous(trans = "log10")+
+#   scale_y_continuous(trans = "log10")+
+#   theme_bw()
 
 save.image("../output/AOS_data_package.RData")
