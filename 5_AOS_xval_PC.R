@@ -1,7 +1,7 @@
 # ****************************************************************
 # ****************************************************************
 # CONDUCT CROSS-VALIDATION ANALYSIS ON A SUBSET OF SPECIES
-#  - OMITTING BOTH POINT COUNTS AND CHECKLISTS FROM 20% OF SQUARES IN EACH CROSSVALIDATION FOLD
+#  - OMITTING ONLY POINT COUNTS FROM 20% OF SQUARES IN EACH CROSSVALIDATION FOLD
 # ****************************************************************
 # ****************************************************************
 
@@ -40,27 +40,27 @@ rm(list=ls())
 # CONDUCT ANALYSIS
 # ------------------------------------------------------------------------------------
 # ************************************************************************************
-setwd("D:/Working_Files/1_Projects/Landbirds/SK_BBA_analysis/AOS_precision/script")
+setwd("C:/Users/ilesd/OneDrive - EC-EC/Iles/Projects/Landbirds/SK_BBA_analysis/AOS_precision/script")
 load("../output/AOS_data_package.RData")
 
-xval_PC_CL <- data.frame()
-if (file.exists("../output/xval_PC_CL.RData")){
-  load("../output/xval_PC_CL.RData")
+xval_PC <- data.frame()
+if (file.exists("../output/xval_PC.RData")){
+  load("../output/xval_PC.RData")
 }
 
 # covariates to include in models
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
-for (sp_code in species_to_fit$sp_code){
+for (sp_code in rev(species_to_fit$sp_code)){
   for (fold in sort(unique(SaskSquares$fold))){
     
-    if (file.exists("../output/xval_PC_CL.RData")){
-      load("../output/xval_PC_CL.RData")
+    if (file.exists("../output/xval_PC.RData")){
+      load("../output/xval_PC.RData")
     }
     
     # Check if this species/xval fold have already been run. If so, skip
-    if (nrow(xval_PC_CL)>0){
-      if (nrow(subset(xval_PC_CL,Species == sp_code & xval_fold == fold))>0) next
+    if (nrow(xval_PC)>0){
+      if (nrow(subset(xval_PC,Species == sp_code & xval_fold == fold))>0) next
     }
     
     print(paste(sp_code," fold ",fold))
@@ -260,11 +260,11 @@ for (sp_code in species_to_fit$sp_code){
     # Withhold 20% of checklist data for cross-validation
     # --------------------------------
     
-    SC_xval <- SC_sp[SC_sp$fold == fold,]
-    SC_sp <- SC_sp[SC_sp$fold != fold,]
+    #SC_xval <- SC_sp[SC_sp$fold == fold,]
+    #SC_sp <- SC_sp[SC_sp$fold != fold,]
     
-    LT_xval <- LT_sp[LT_sp$fold == fold,]
-    LT_sp <- LT_sp[LT_sp$fold != fold,]
+    #LT_xval <- LT_sp[LT_sp$fold == fold,]
+    #LT_sp <- LT_sp[LT_sp$fold != fold,]
     
     # --------------------------------
     # Specify model likelihoods
@@ -292,63 +292,63 @@ for (sp_code in species_to_fit$sp_code){
     # -----------------------------
     # Use only point count data
     # -----------------------------
-    
-    model_components = as.formula(paste0('~
-  Intercept_PC(1)+
-  TSS(main = TSS,model = TSS_spde) +
-  kappa_surveyID(surveyID, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  spde_coarse(main = coordinates, model = matern_coarse) +
-   
-  ',
-                                         
-                                         paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
-    )
-    
-    start <- Sys.time()
-    fit_PConly <- bru(components = model_components,
-                      like_PC,
-                      options = list(
-                        control.inla = list(int.strategy = "eb"),
-                        bru_verbose = 4,
-                        bru_max_iter = 5,
-                        bru_initial = inits))
-    end <- Sys.time()
-    runtime_PConly <- difftime( end,start, units="mins") # 16 min
-    
+  #   
+  #   model_components = as.formula(paste0('~
+  # Intercept_PC(1)+
+  # TSS(main = TSS,model = TSS_spde) +
+  # kappa_surveyID(surveyID, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  # kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  # kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  # spde_coarse(main = coordinates, model = matern_coarse) +
+  #  
+  # ',
+  #                                        
+  #                                        paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
+  #   )
+  #   
+  #   start <- Sys.time()
+  #   fit_PConly <- bru(components = model_components,
+  #                     like_PC,
+  #                     options = list(
+  #                       control.inla = list(int.strategy = "eb"),
+  #                       bru_verbose = 4,
+  #                       bru_max_iter = 5,
+  #                       bru_initial = inits))
+  #   end <- Sys.time()
+  #   runtime_PConly <- difftime( end,start, units="mins") # 16 min
+  #   
     # -----------------------------
     # Use checklists only
     # -----------------------------
     
-    model_components = as.formula(paste0('~
-  Intercept_SC(1)+
-  Intercept_LT(1)+
-  TSS(main = TSS,model = TSS_spde) +
-  kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
-  spde_coarse(main = coordinates, model = matern_coarse) +
-  
-  SC_duration(main = SC_duration,model = SC_duration_spde) +
-  LT_duration(main = LT_duration,model = LT_duration_spde) +
-  LT_distance(main = LT_distance,model = LT_distance_spde) +
-    
-  ',
-                                         
-                                         paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
-    )
-    
-    start <- Sys.time()
-    fit_CLonly <- bru(components = model_components,
-                      like_SC,like_LT,
-                      options = list(
-                        control.inla = list(int.strategy = "eb"),
-                        bru_verbose = 4,
-                        bru_max_iter = 5,
-                        bru_initial = inits))
-    end <- Sys.time()
-    runtime_CLonly <- difftime( end,start, units="mins") # 9 min
-    
+  #   model_components = as.formula(paste0('~
+  # Intercept_SC(1)+
+  # Intercept_LT(1)+
+  # TSS(main = TSS,model = TSS_spde) +
+  # kappa_squareID(sq_idx, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  # kappa_squareday(square_day, model = "iid", constr = TRUE, hyper = list(prec = kappa_prec))+
+  # spde_coarse(main = coordinates, model = matern_coarse) +
+  # 
+  # SC_duration(main = SC_duration,model = SC_duration_spde) +
+  # LT_duration(main = LT_duration,model = LT_duration_spde) +
+  # LT_distance(main = LT_distance,model = LT_distance_spde) +
+  #   
+  # ',
+  #                                        
+  #                                        paste0("Beta1_",covariates_to_include,'(1,model="linear", mean.linear = 0, prec.linear = 4)', collapse = " + "))
+  #   )
+  #   
+  #   start <- Sys.time()
+  #   fit_CLonly <- bru(components = model_components,
+  #                     like_SC,like_LT,
+  #                     options = list(
+  #                       control.inla = list(int.strategy = "eb"),
+  #                       bru_verbose = 4,
+  #                       bru_max_iter = 5,
+  #                       bru_initial = inits))
+  #   end <- Sys.time()
+  #   runtime_CLonly <- difftime( end,start, units="mins") # 9 min
+  #   
     # -----------------------------
     # Use point counts and checklists
     # -----------------------------
@@ -403,35 +403,35 @@ for (sp_code in species_to_fit$sp_code){
                   spde_coarse +
                    ',
                                         paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
-    
-    pred_formula_SC = as.formula(paste0(' ~
-
-                  Intercept_SC +
-                  TSS +
-                  SC_duration +
-                  spde_coarse +
-                   ',
-                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
-    
-    pred_formula_LT = as.formula(paste0(' ~
-
-                  Intercept_LT +
-                  TSS +
-                  LT_duration +
-                  LT_distance +
-                  spde_coarse +
-                   ',
-                                        paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
-    
+    # 
+    # pred_formula_SC = as.formula(paste0(' ~
+    # 
+    #               Intercept_SC +
+    #               TSS +
+    #               SC_duration +
+    #               spde_coarse +
+    #                ',
+    #                                     paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
+    # 
+    # pred_formula_LT = as.formula(paste0(' ~
+    # 
+    #               Intercept_LT +
+    #               TSS +
+    #               LT_duration +
+    #               LT_distance +
+    #               spde_coarse +
+    #                ',
+    #                                     paste0("Beta1_",covariates_to_include,'*',covariates_to_include, collapse = " + ")))
+    # 
     # -------------------------
     # Predictions on point count data
     # -------------------------
-    
-    pred_PC_PConly <- generate(fit_PConly, 
-                               PC_xval, 
-                               formula = pred_formula_PC,
-                               n.samples = nsamp) %>% 
-      apply(.,1,median)
+    # 
+    # pred_PC_PConly <- generate(fit_PConly, 
+    #                            PC_xval, 
+    #                            formula = pred_formula_PC,
+    #                            n.samples = nsamp) %>% 
+    #   apply(.,1,median)
     
     pred_PC_integrated <- generate(fit_integrated, 
                                    PC_xval, 
@@ -440,50 +440,50 @@ for (sp_code in species_to_fit$sp_code){
       apply(.,1,median)
     
     # Add lognormal variance corrections, and exponentiate to place on count scale
-    pred_PC_PConly     <- exp(pred_PC_PConly     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
+    #pred_PC_PConly     <- exp(pred_PC_PConly     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_surveyID",4]     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_PConly)$inla$hyperpar["Precision for kappa_squareday",4])
     pred_PC_integrated <- exp(pred_PC_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_surveyID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
     
-    # -------------------------
-    # Predictions on stationary checklists
-    # -------------------------
-    
-    pred_SC_CLonly <- generate(fit_CLonly, 
-                               SC_xval, 
-                               formula = pred_formula_SC,
-                               n.samples = nsamp) %>% 
-      apply(.,1,median)
-    
-    pred_SC_integrated <- generate(fit_integrated, 
-                                   SC_xval, 
-                                   formula = pred_formula_SC,
-                                   n.samples = nsamp) %>% 
-      apply(.,1,median)
-    
-    # Add lognormal variance corrections, place on count scale
-    pred_SC_CLonly     <- exp(pred_SC_CLonly + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareday",4])
-    pred_SC_integrated <- exp(pred_SC_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
-    
-    
-    # -------------------------
-    # Predictions on linear transect checklists
-    # -------------------------
-    
-    pred_LT_CLonly <- generate(fit_CLonly, 
-                               LT_xval, 
-                               formula = pred_formula_LT,
-                               n.samples = nsamp) %>% 
-      apply(.,1,median)
-    
-    pred_LT_integrated <- generate(fit_integrated, 
-                                   LT_xval, 
-                                   formula = pred_formula_LT,
-                                   n.samples = nsamp) %>% 
-      apply(.,1,median)
-    
-    # Add lognormal variance corrections, place on count scale
-    pred_LT_CLonly     <- exp(pred_LT_CLonly + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareday",4])
-    pred_LT_integrated <- exp(pred_LT_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
-    
+    # # -------------------------
+    # # Predictions on stationary checklists
+    # # -------------------------
+    # 
+    # pred_SC_CLonly <- generate(fit_CLonly, 
+    #                            SC_xval, 
+    #                            formula = pred_formula_SC,
+    #                            n.samples = nsamp) %>% 
+    #   apply(.,1,median)
+    # 
+    # pred_SC_integrated <- generate(fit_integrated, 
+    #                                SC_xval, 
+    #                                formula = pred_formula_SC,
+    #                                n.samples = nsamp) %>% 
+    #   apply(.,1,median)
+    # 
+    # # Add lognormal variance corrections, place on count scale
+    # pred_SC_CLonly     <- exp(pred_SC_CLonly + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareday",4])
+    # pred_SC_integrated <- exp(pred_SC_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
+    # 
+    # 
+    # # -------------------------
+    # # Predictions on linear transect checklists
+    # # -------------------------
+    # 
+    # pred_LT_CLonly <- generate(fit_CLonly, 
+    #                            LT_xval, 
+    #                            formula = pred_formula_LT,
+    #                            n.samples = nsamp) %>% 
+    #   apply(.,1,median)
+    # 
+    # pred_LT_integrated <- generate(fit_integrated, 
+    #                                LT_xval, 
+    #                                formula = pred_formula_LT,
+    #                                n.samples = nsamp) %>% 
+    #   apply(.,1,median)
+    # 
+    # # Add lognormal variance corrections, place on count scale
+    # pred_LT_CLonly     <- exp(pred_LT_CLonly + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareID",4]     + 0.5/summary(fit_CLonly)$inla$hyperpar["Precision for kappa_squareday",4])
+    # pred_LT_integrated <- exp(pred_LT_integrated + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareID",4] + 0.5/summary(fit_integrated)$inla$hyperpar["Precision for kappa_squareday",4])
+    # 
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     # Calculate crossvalidation scores
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
@@ -492,139 +492,126 @@ for (sp_code in species_to_fit$sp_code){
     # Predictions on point count data
     # -------------------------
     
-    
-    if (length(unique(PC_xval$presence))==1){
-      AUC_PC_CLonly = AUC_PC_integrated = NA
-    } else{
-      # AUC (for presence/absence predictions)
-      AUC_PC_PConly <- as.numeric(auc(PC_xval$presence, 1-exp(-pred_PC_PConly)))
-      AUC_PC_integrated <- as.numeric(auc(PC_xval$presence, 1-exp(-pred_PC_integrated)))
-    }
+    # AUC (for presence/absence predictions)
+    #AUC_PC_PConly <- as.numeric(auc(PC_xval$presence, 1-exp(-pred_PC_PConly)))
+    AUC_PC_integrated <- as.numeric(auc(PC_xval$presence, 1-exp(-pred_PC_integrated)))
     
     # correlation (for count predictions)
-    cor_PC_PConly <- as.numeric(cor(PC_xval$count, pred_PC_PConly))
+    #cor_PC_PConly <- as.numeric(cor(PC_xval$count, pred_PC_PConly))
     cor_PC_integrated <- as.numeric(cor(PC_xval$count, pred_PC_integrated))
     
     # MSE (for count predictions)
-    MSE_PC_PConly <- mean((PC_xval$count - pred_PC_PConly)^2)
+    #MSE_PC_PConly <- mean((PC_xval$count - pred_PC_PConly)^2)
     MSE_PC_integrated <- mean((PC_xval$count - pred_PC_integrated)^2)
     
-    # -------------------------
-    # Predictions on stationary checklists
-    # -------------------------
-    
-    if (length(unique(SC_xval$presence))==1){
-      AUC_SC_CLonly = AUC_SC_integrated = NA
-    } else{
-      # AUC (for presence/absence predictions)
-      AUC_SC_CLonly <- as.numeric(auc(SC_xval$presence, 1-exp(-pred_SC_CLonly)))
-      AUC_SC_integrated <- as.numeric(auc(SC_xval$presence, 1-exp(-pred_SC_integrated)))
-    }
-    
-    # correlation (for count predictions)
-    cor_SC_CLonly <- as.numeric(cor(SC_xval$count, pred_SC_CLonly))
-    cor_SC_integrated <- as.numeric(cor(SC_xval$count, pred_SC_integrated))
-    
-    # MSE (for count predictions)
-    MSE_SC_CLonly <- mean((SC_xval$count - pred_SC_CLonly)^2)
-    MSE_SC_integrated <- mean((SC_xval$count - pred_SC_integrated)^2)
-    
-    # -------------------------
-    # Predictions on linear transect checklists
-    # -------------------------
-    
-    if (length(unique(LT_xval$presence))==1){
-      AUC_LT_CLonly = AUC_LT_integrated = NA
-    } else{
-      # AUC (for presence/absence predictions)
-      AUC_LT_CLonly <- as.numeric(auc(LT_xval$presence, 1-exp(-pred_LT_CLonly)))
-      AUC_LT_integrated <- as.numeric(auc(LT_xval$presence, 1-exp(-pred_LT_integrated)))
-    }
-    
-    # correlation (for count predictions)
-    cor_LT_CLonly <- as.numeric(cor(LT_xval$count, pred_LT_CLonly))
-    cor_LT_integrated <- as.numeric(cor(LT_xval$count, pred_LT_integrated))
-    
-    # MSE (for count predictions)
-    MSE_LT_CLonly <- mean((LT_xval$count - pred_LT_CLonly)^2)
-    MSE_LT_integrated <- mean((LT_xval$count - pred_LT_integrated)^2)
-    
+    # # -------------------------
+    # # Predictions on stationary checklists
+    # # -------------------------
+    # 
+    # # AUC (for presence/absence predictions)
+    # AUC_SC_CLonly <- as.numeric(auc(SC_xval$presence, 1-exp(-pred_SC_CLonly)))
+    # AUC_SC_integrated <- as.numeric(auc(SC_xval$presence, 1-exp(-pred_SC_integrated)))
+    # 
+    # # correlation (for count predictions)
+    # cor_SC_CLonly <- as.numeric(cor(SC_xval$count, pred_SC_CLonly))
+    # cor_SC_integrated <- as.numeric(cor(SC_xval$count, pred_SC_integrated))
+    # 
+    # # MSE (for count predictions)
+    # MSE_SC_CLonly <- mean((SC_xval$count - pred_SC_CLonly)^2)
+    # MSE_SC_integrated <- mean((SC_xval$count - pred_SC_integrated)^2)
+    # 
+    # # -------------------------
+    # # Predictions on linear transect checklists
+    # # -------------------------
+    # 
+    # # AUC (for presence/absence predictions)
+    # AUC_LT_CLonly <- as.numeric(auc(LT_xval$presence, 1-exp(-pred_LT_CLonly)))
+    # AUC_LT_integrated <- as.numeric(auc(LT_xval$presence, 1-exp(-pred_LT_integrated)))
+    # 
+    # # correlation (for count predictions)
+    # cor_LT_CLonly <- as.numeric(cor(LT_xval$count, pred_LT_CLonly))
+    # cor_LT_integrated <- as.numeric(cor(LT_xval$count, pred_LT_integrated))
+    # 
+    # # MSE (for count predictions)
+    # MSE_LT_CLonly <- mean((LT_xval$count - pred_LT_CLonly)^2)
+    # MSE_LT_integrated <- mean((LT_xval$count - pred_LT_integrated)^2)
+    # 
     
     # -------------------------------------------------------
     # Save results
     # -------------------------------------------------------
     
-    if (file.exists("../output/xval_PC_CL.RData")){
-      load("../output/xval_PC_CL.RData")
+    if (file.exists("../output/xval_PC.RData")){
+      load("../output/xval_PC.RData")
     }
     
     # Compare crossvalidation metrics
-    xval_PC_CL <- rbind(xval_PC_CL,
-                        data.frame(Species = sp_code,
-                                   xval_fold = fold,
-                                   
-                                   # Number of times species was observed in each dataset
-                                   n_obs_PC = sum(PC_sp$count>0),
-                                   n_obs_SC = sum(SC_sp$count>0),
-                                   n_obs_LT = sum(LT_sp$count>0),
-                                   
-                                   # Amount of data in crossvalidation squares
-                                   n_obs_PC_xval = sum(PC_xval$count>0),
-                                   n_obs_SC_xval = sum(SC_xval$count>0),
-                                   n_obs_LT_xval = sum(LT_xval$count>0),
-                                   
-                                   # -------------------------------
-                                   # Crossvalidation metrics - point counts
-                                   # -------------------------------
-                                   
-                                   # Correlation between predictions and observed
-                                   cor_PC_PConly = cor_PC_PConly,
-                                   cor_PC_integrated = cor_PC_integrated,
-                                   
-                                   # AUC
-                                   AUC_PC_PConly = AUC_PC_PConly,
-                                   AUC_PC_integrated = AUC_PC_integrated,
-                                   
-                                   # Mean squared error
-                                   MSE_PC_PConly = MSE_PC_PConly,
-                                   MSE_PC_integrated = MSE_PC_integrated,
-                                   
-                                   # -------------------------------
-                                   # Crossvalidation metrics - point counts
-                                   # -------------------------------
-                                   
-                                   # Correlation between predictions and observed
-                                   cor_SC_CLonly = cor_SC_CLonly,
-                                   cor_SC_integrated = cor_SC_integrated,
-                                   
-                                   # AUC
-                                   AUC_SC_CLonly = AUC_SC_CLonly,
-                                   AUC_SC_integrated = AUC_SC_integrated,
-                                   
-                                   # Mean squared error
-                                   MSE_SC_CLonly = MSE_SC_CLonly,
-                                   MSE_SC_integrated = MSE_SC_integrated,
-                                   
-                                   # -------------------------------
-                                   # Crossvalidation metrics - point counts
-                                   # -------------------------------
-                                   
-                                   # Correlation between predictions and observed
-                                   cor_LT_CLonly = cor_LT_CLonly,
-                                   cor_LT_integrated = cor_LT_integrated,
-                                   
-                                   # AUC
-                                   AUC_LT_CLonly = AUC_LT_CLonly,
-                                   AUC_LT_integrated = AUC_LT_integrated,
-                                   
-                                   # Mean squared error
-                                   MSE_LT_CLonly = MSE_LT_CLonly,
-                                   MSE_LT_integrated = MSE_LT_integrated
-                                   
-                        )
+    xval_PC <- rbind(xval_PC,
+                                    data.frame(Species = sp_code,
+                                               xval_fold = fold,
+                                               
+                                               # Number of times species was observed in each dataset
+                                               n_obs_PC = sum(PC_sp$count>0),
+                                               n_obs_SC = sum(SC_sp$count>0),
+                                               n_obs_LT = sum(LT_sp$count>0),
+                                               
+                                               # Amount of data in crossvalidation squares
+                                               #n_obs_PC_xval = sum(PC_xval$count>0),
+                                               #n_obs_SC_xval = sum(SC_xval$count>0),
+                                               #n_obs_LT_xval = sum(LT_xval$count>0),
+                                               
+                                               # -------------------------------
+                                               # Crossvalidation metrics - point counts
+                                               # -------------------------------
+                                               
+                                               # Correlation between predictions and observed
+                                               #cor_PC_PConly = cor_PC_PConly,
+                                               cor_PC_integrated = cor_PC_integrated,
+                                               
+                                               # AUC
+                                               #AUC_PC_PConly = AUC_PC_PConly,
+                                               AUC_PC_integrated = AUC_PC_integrated,
+                                               
+                                               # Mean squared error
+                                               #MSE_PC_PConly = MSE_PC_PConly
+                                               MSE_PC_integrated = MSE_PC_integrated
+                                               
+                                               # # -------------------------------
+                                               # # Crossvalidation metrics - point counts
+                                               # # -------------------------------
+                                               # 
+                                               # # Correlation between predictions and observed
+                                               # cor_SC_CLonly = cor_SC_CLonly,
+                                               # cor_SC_integrated = cor_SC_integrated,
+                                               # 
+                                               # # AUC
+                                               # AUC_SC_CLonly = AUC_SC_CLonly,
+                                               # AUC_SC_integrated = AUC_SC_integrated,
+                                               # 
+                                               # # Mean squared error
+                                               # MSE_SC_CLonly = MSE_SC_CLonly,
+                                               # MSE_SC_integrated = MSE_SC_integrated,
+                                               # 
+                                               # # -------------------------------
+                                               # # Crossvalidation metrics - point counts
+                                               # # -------------------------------
+                                               # 
+                                               # # Correlation between predictions and observed
+                                               # cor_LT_CLonly = cor_LT_CLonly,
+                                               # cor_LT_integrated = cor_LT_integrated,
+                                               # 
+                                               # # AUC
+                                               # AUC_LT_CLonly = AUC_LT_CLonly,
+                                               # AUC_LT_integrated = AUC_LT_integrated,
+                                               # 
+                                               # # Mean squared error
+                                               # MSE_LT_CLonly = MSE_LT_CLonly,
+                                               # MSE_LT_integrated = MSE_LT_integrated
+                                               # 
+                                    )
     )
     
-    save(xval_PC_CL, file = "../output/xval_PC_CL.RData")
+    save(xval_PC, file = "../output/xval_PC.RData")
     
     rm(list = c("fit_PConly","fit_integrated","fit_CLonly"))
     
