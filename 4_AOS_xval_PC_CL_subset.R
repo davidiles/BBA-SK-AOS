@@ -56,7 +56,7 @@ if (file.exists("../output/xval_PC_CL_subset.RData")){
 covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
 set.seed(999)
-species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100) %>%
+species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100 & n_CL >= 100) %>%
   sample_n(30)
 
 for (fold in sort(unique(SaskSquares$fold))){
@@ -349,7 +349,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                          options = list(
                            control.inla = list(int.strategy = "eb"),
                            bru_verbose = 4,
-                           bru_max_iter = 5,
+                           bru_max_iter = 8,
                            bru_initial = inits))
     end <- Sys.time()
     runtime_PConly_50 <- difftime( end,start, units="mins")
@@ -381,7 +381,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                           options = list(
                             control.inla = list(int.strategy = "eb"),
                             bru_verbose = 4,
-                            bru_max_iter = 5,
+                            bru_max_iter = 8,
                             bru_initial = inits))
     end <- Sys.time()
     runtime_PConly_100 <- difftime( end,start, units="mins")
@@ -419,7 +419,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                                 options = list(
                                   control.inla = list(int.strategy = "eb"),
                                   bru_verbose = 4,
-                                  bru_max_iter = 5,
+                                  bru_max_iter = 8,
                                   bru_initial = inits))
     end <- Sys.time()
     runtime_integrated_50_50 <- difftime( end,start, units="mins")
@@ -437,7 +437,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                                  options = list(
                                    control.inla = list(int.strategy = "eb"),
                                    bru_verbose = 4,
-                                   bru_max_iter = 5,
+                                   bru_max_iter = 8,
                                    bru_initial = inits))
     end <- Sys.time()
     runtime_integrated_50_100 <- difftime( end,start, units="mins")
@@ -516,10 +516,21 @@ for (fold in sort(unique(SaskSquares$fold))){
         MSE_integrated_50_50[i] <- mean((PC_xval$count - pred_integrated_50_50[,i])^2)
         MSE_integrated_50_100[i] <- mean((PC_xval$count - pred_integrated_50_100[,i])^2)
         
-        lppd_PConly_50[i] <- sum(log(dpois(PC_xval$count,pred_PConly_50[,i])))
-        lppd_PConly_100[i] <- sum(log(dpois(PC_xval$count,pred_PConly_100[,i])))
-        lppd_integrated_50_50[i] <- sum(log(dpois(PC_xval$count,pred_integrated_50_50[,i])))
-        lppd_integrated_50_100[i] <- sum(log(dpois(PC_xval$count,pred_integrated_50_100[,i])))
+        # Due to numerical overflow, set minimum log(density) to -1000
+        lppd_PConly_50 <- log(dpois(PC_xval$count,pred_PConly_50[,i]))
+        lppd_PConly_100 <- log(dpois(PC_xval$count,pred_PConly_100[,i]))
+        lppd_integrated_50_50 <- log(dpois(PC_xval$count,pred_integrated_50_50[,i]))
+        lppd_integrated_50_100 <- log(dpois(PC_xval$count,pred_integrated_50_100[,i]))
+        
+        lppd_PConly_50[lppd_PConly_50 == -Inf] = -1000
+        lppd_PConly_100[lppd_PConly_100 == -Inf] = -1000
+        lppd_integrated_50_50[lppd_integrated_50_50 == -Inf] = -1000
+        lppd_integrated_50_100[lppd_integrated_50_100 == -Inf] = -1000
+        
+        lppd_PConly_50[i] <- sum(lppd_PConly_50)
+        lppd_PConly_100[i] <- sum(lppd_PConly_100)
+        lppd_integrated_50_50[i] <- sum(lppd_integrated_50_50)
+        lppd_integrated_50_100[i] <- sum(lppd_integrated_50_100)
         
       }
   
@@ -531,20 +542,46 @@ for (fold in sort(unique(SaskSquares$fold))){
       load("../output/xval_PC_CL_subset.RData")
     }
     
+    n_sq_det_PC <- PC_sp %>% 
+      as.data.frame() %>%
+      subset(count>0) %>%
+      summarize(n_sq_det = length(unique(sq_id)))
+    
+    n_sq_det_SC <- SC_sp %>% 
+      as.data.frame() %>%
+      subset(count>0) %>%
+      summarize(n_sq_det = length(unique(sq_id)))
+    
+    n_det_PC <- PC_sp %>% 
+      as.data.frame() %>%
+      summarize(n_det = sum(count>0))
+    
+    n_det_SC <- SC_sp %>% 
+      as.data.frame() %>%
+      summarize(n_det = sum(count>0))
+    
+    
     # Compare crossvalidation metrics
     xval_PC_CL_subset <- rbind(xval_PC_CL_subset,
                                data.frame(Species = sp_code,
                                           xval_fold = fold,
                                           
-                                          # Number of times species was observed in each dataset
-                                          n_obs_PC = sum(PC_sp$count>0),
-                                          n_obs_SC = sum(SC_sp$count>0),
-                                          n_obs_LT = sum(LT_sp$count>0),
+                                          # Number of squares in 'full' dataset
+                                          n_sq = length(unique(PC_sp$sq_id)),
                                           
-                                          # Amount of data in crossvalidation squares
-                                          n_obs_PC_xval = sum(PC_xval$count>0),
-                                          n_obs_SC_xval = sum(SC_xval$count>0),
-                                          n_obs_LT_xval = sum(LT_xval$count>0),
+                                          # Number of squares in which species was detected in full PC dataset
+                                          n_sq_det_PC = n_sq_det_PC$n_sq_det,
+                                          # Number of detections in full PC dataset
+                                          n_det_PC = n_det_PC$n_det,
+                                          
+                                          # Number of squares in which species was detected in full SC dataset
+                                          n_sq_det_SC = n_sq_det_SC$n_sq_det,
+                                          # Number of detections in full SC dataset
+                                          n_det_SC = n_det_SC$n_det,
+                                          
+                                          # Number of detections in crossvalidation squares
+                                          n_det_PC_xval = sum(PC_xval$count>0),
+                                          n_det_SC_xval = sum(SC_xval$count>0),
                                           
                                           # -------------------------------
                                           # Crossvalidation metrics
@@ -576,6 +613,8 @@ for (fold in sort(unique(SaskSquares$fold))){
                                           
                                )
     )
+    
+    if (min(xval_PC_CL_subset[,c("lppd_PConly_50","lppd_PConly_100","lppd_integrated_50_50","lppd_integrated_50_100")]) == "-Inf") break
     
     save(xval_PC_CL_subset, file = "../output/xval_PC_CL_subset.RData")
     
