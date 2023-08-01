@@ -48,8 +48,8 @@ load("../output/AOS_data_package.RData")
 
 
 xval_PC_CL_subset <- data.frame()
-if (file.exists("../output/xval_PC_CL_subset.RData")){
-  load("../output/xval_PC_CL_subset.RData")
+if (file.exists("../output/xval_PC_CL_subset2.RData")){
+  load("../output/xval_PC_CL_subset2.RData")
 }
 
 # covariates to include in models
@@ -57,13 +57,14 @@ covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
 set.seed(999)
 species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100 & n_CL >= 100) %>%
-  sample_n(30)
+  sample_n(30) %>%
+  arrange(n_PC)
 
-for (fold in sort(unique(SaskSquares$fold))){
-  for (sp_code in species_to_fit$sp_code){
-    
-    if (file.exists("../output/xval_PC_CL_subset.RData")){
-      load("../output/xval_PC_CL_subset.RData")
+ for (sp_code in species_to_fit$sp_code){
+   for (fold in 1:5){
+     
+    if (file.exists("../output/xval_PC_CL_subset2.RData")){
+      load("../output/xval_PC_CL_subset2.RData")
     }
     
     # Check if this species/xval fold have already been run. If so, skip
@@ -286,22 +287,25 @@ for (fold in sort(unique(SaskSquares$fold))){
     n_samples <- full_join(n_samples_PC,n_samples_SC) %>%
       rowwise() %>%
       mutate(n_min = min(c(n_PC,n_SC))) %>%
-      subset(n_min >= 10)
+      na.omit()
     
-    n_samples
-    
+    # Ensure equal sample sizes
     PC_sp <- PC_sp %>% 
       st_as_sf() %>%
       subset(sq_id %in% n_samples$sq_id) %>%
+      full_join(n_samples) %>%
       group_by(sq_id) %>%
-      slice_sample(n = 10) %>%
+      mutate(samp = sample(n())) %>%
+      filter(samp <= n_min) %>%
       as('Spatial')
     
     SC_sp <- SC_sp %>% 
       st_as_sf() %>%
       subset(sq_id %in% n_samples$sq_id) %>%
+      full_join(n_samples) %>%
       group_by(sq_id) %>%
-      slice_sample(n = 10) %>%
+      mutate(samp = sample(n())) %>%
+      filter(samp <= n_min) %>%
       as('Spatial')
     
     # --------------------------------
@@ -349,7 +353,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                          options = list(
                            control.inla = list(int.strategy = "eb"),
                            bru_verbose = 4,
-                           bru_max_iter = 8,
+                           bru_max_iter = 5,
                            bru_initial = inits))
     end <- Sys.time()
     runtime_PConly_50 <- difftime( end,start, units="mins")
@@ -381,7 +385,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                           options = list(
                             control.inla = list(int.strategy = "eb"),
                             bru_verbose = 4,
-                            bru_max_iter = 8,
+                            bru_max_iter = 5,
                             bru_initial = inits))
     end <- Sys.time()
     runtime_PConly_100 <- difftime( end,start, units="mins")
@@ -419,7 +423,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                                 options = list(
                                   control.inla = list(int.strategy = "eb"),
                                   bru_verbose = 4,
-                                  bru_max_iter = 8,
+                                  bru_max_iter = 5,
                                   bru_initial = inits))
     end <- Sys.time()
     runtime_integrated_50_50 <- difftime( end,start, units="mins")
@@ -437,7 +441,7 @@ for (fold in sort(unique(SaskSquares$fold))){
                                  options = list(
                                    control.inla = list(int.strategy = "eb"),
                                    bru_verbose = 4,
-                                   bru_max_iter = 8,
+                                   bru_max_iter = 5,
                                    bru_initial = inits))
     end <- Sys.time()
     runtime_integrated_50_100 <- difftime( end,start, units="mins")
@@ -538,8 +542,8 @@ for (fold in sort(unique(SaskSquares$fold))){
     # Save results
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     
-    if (file.exists("../output/xval_PC_CL_subset.RData")){
-      load("../output/xval_PC_CL_subset.RData")
+    if (file.exists("../output/xval_PC_CL_subset2.RData")){
+      load("../output/xval_PC_CL_subset2.RData")
     }
     
     n_sq_det_PC <- PC_sp %>% 
@@ -616,7 +620,7 @@ for (fold in sort(unique(SaskSquares$fold))){
     
     if (min(xval_PC_CL_subset[,c("lppd_PConly_50","lppd_PConly_100","lppd_integrated_50_50","lppd_integrated_50_100")]) == "-Inf") break
     
-    save(xval_PC_CL_subset, file = "../output/xval_PC_CL_subset.RData")
+    save(xval_PC_CL_subset, file = "../output/xval_PC_CL_subset2.RData")
     
     rm(list = c("fit_PConly_50","fit_PConly_100","fit_integrated_50_50","fit_integrated_50_100",
                 "pred_PConly_50","pred_PConly_100","pred_integrated_50_50","pred_integrated_50_100"))
