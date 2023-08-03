@@ -48,8 +48,8 @@ load("../output/AOS_data_package.RData")
 
 
 xval_PC_CL_subset <- data.frame()
-if (file.exists("../output/xval_PC_CL_subset2.RData")){
-  load("../output/xval_PC_CL_subset2.RData")
+if (file.exists("../output/xval_PC_CL_subset.RData")){
+  load("../output/xval_PC_CL_subset.RData")
 }
 
 # covariates to include in models
@@ -57,14 +57,13 @@ covariates_to_include <- c("PC1","PC2","PC3","Water_5km")
 
 set.seed(999)
 species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100 & n_CL >= 100) %>%
-  sample_n(30) %>%
   arrange(n_PC)
 
- for (sp_code in species_to_fit$sp_code){
-   for (fold in 1:5){
+ for (sp_code in rev(species_to_fit$sp_code)){
+   for (fold in rev(1:5)){
      
-    if (file.exists("../output/xval_PC_CL_subset2.RData")){
-      load("../output/xval_PC_CL_subset2.RData")
+    if (file.exists("../output/xval_PC_CL_subset.RData")){
+      load("../output/xval_PC_CL_subset.RData")
     }
     
     # Check if this species/xval fold have already been run. If so, skip
@@ -542,8 +541,8 @@ species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100
     # Save results
     # &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
     
-    if (file.exists("../output/xval_PC_CL_subset2.RData")){
-      load("../output/xval_PC_CL_subset2.RData")
+    if (file.exists("../output/xval_PC_CL_subset.RData")){
+      load("../output/xval_PC_CL_subset.RData")
     }
     
     n_sq_det_PC <- PC_sp %>% 
@@ -620,7 +619,7 @@ species_to_fit <- subset(species_distribution_summary, n_sq >= 200 & n_PC >= 100
     
     if (min(xval_PC_CL_subset[,c("lppd_PConly_50","lppd_PConly_100","lppd_integrated_50_50","lppd_integrated_50_100")]) == "-Inf") break
     
-    save(xval_PC_CL_subset, file = "../output/xval_PC_CL_subset2.RData")
+    save(xval_PC_CL_subset, file = "../output/xval_PC_CL_subset.RData")
     
     rm(list = c("fit_PConly_50","fit_PConly_100","fit_integrated_50_50","fit_integrated_50_100",
                 "pred_PConly_50","pred_PConly_100","pred_integrated_50_50","pred_integrated_50_100"))
