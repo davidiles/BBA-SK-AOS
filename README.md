@@ -1,7 +1,7 @@
 # Overview
 _Written by David Iles on 10 August 2023_
 
-This analysis was presented at the 2023 American Ornithological Society conference, in a symposium title "Analysis challenges for breeding bird atlases".  This is mostly a personal record of the analyses I am developing for Canada's breeding bird atlases, and there is no guarantee these scripts are "final". 
+This analysis was presented at the 2023 American Ornithological Society conference, in a symposium titled _Analysis challenges for breeding bird atlases_.  This is mostly a personal record of the analyses I am developing for Canada's breeding bird atlases, and there is no guarantee these scripts are "final". 
 
 # Objectives
 
