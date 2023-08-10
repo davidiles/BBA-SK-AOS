@@ -12,10 +12,13 @@ Use 5-fold spatially blocked cross-validation to evaluate the costs/benefits of:
 
 Cross-validation accuracy is measured using:
 
-1) Area under the curve (ability to accurately predict 
-2) 
+1) Area under the curve (ability to accurately predict species presences/absences)
+2) Correlation between predicted and observed counts (ability to predict spatial patterns)
+3) Mean squared error (ability to predict counts)
+4) Log-pointwise predictive density (ability to predict counts)
 
 # Workflow
 
-1) `test`
+1) `1_select_xval_squares.R` divides the landscape into a spatially balanced, random selection of 50 km x 50 km blocks.  It then separates them into 5 cross-validation folds.
+2) 
 
