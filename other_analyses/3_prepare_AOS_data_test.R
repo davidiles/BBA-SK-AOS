@@ -130,14 +130,14 @@ load("../data/Checklist_data_2.RData")
 # Covariates / spatial locations of each checklist survey (daily observations)
 DO_surveyinfo <- Checklist_data$DO_surveyinfo
 
-start_date <- lubridate::ymd("2022-05-15") %>% yday()
-end_date <- lubridate::ymd("2022-07-15") %>% yday()
+start_date <- lubridate::ymd("2022-05-31") %>% yday()
+end_date <- lubridate::ymd("2022-07-07") %>% yday()
 
 # Select stationary counts to use
 SC_to_use <- subset(DO_surveyinfo,
                     ProtocolType == "Stationary count" & 
-                      HSS >= -0.5 &
-                      HSS <= 6 &
+                      HSS >= -1 &
+                      HSS <= 8 &
                       yday >= start_date &
                       yday <= end_date &
                       DurationInHours <= 1)
@@ -145,13 +145,13 @@ SC_to_use <- subset(DO_surveyinfo,
 # Select linear transects to use
 LT_to_use <- subset(DO_surveyinfo,
                     ProtocolType == "Linear transect" & 
-                      HSS >= -0.5 &
-                      HSS <= 6 &
+                      HSS >= -1 &
+                      HSS <= 8 &
                       yday >= start_date &
                       yday <= end_date &
                       DurationInHours > (10/60) &
                       DurationInHours <= 2 &
-                      TravelDistance_m <= 5000)
+                      TravelDistance_m <= 10000)
 
 CL_to_use <- c(SC_to_use$obs_index,LT_to_use$obs_index)
 dim(DO_surveyinfo) # 24672
@@ -282,4 +282,4 @@ species_distribution_summary <- subset(species_distribution_summary,
 #   scale_y_continuous(trans = "log10")+
 #   theme_bw()
 
-save.image("../output/AOS_data_package.RData")
+save.image("../output/AOS_data_package_test.RData")

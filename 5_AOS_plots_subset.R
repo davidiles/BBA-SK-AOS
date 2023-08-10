@@ -7,25 +7,11 @@ my_packs <- c(
   # Data management
   'tidyverse',
   
-  # Spatial functions
-  #'sf','raster','ggspatial','rgeos','fasterize','exactextractr','circular',
-  #'lubridate',
-  
-  # For PCA
-  #'factoextra',
-  
-  # Spatial analysis
-  #'inlabru','ebirdst',
-  
   # For plotting
   'viridis','scales','ggpubr','ggtext','ggrepel','ggthemes')
 
 if (any(!my_packs %in% installed.packages()[, 'Package'])) {install.packages(my_packs[which(!my_packs %in% installed.packages()[, 'Package'])],dependencies = TRUE)}
 lapply(my_packs, require, character.only = TRUE)
-
-#library(INLA) # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep = TRUE)
-# library(napops) # For detectability offsets  # devtools::install_github("na-pops/napops") 
-# napops::fetch_data()  # - only needs to be run once
 
 rm(list=ls())
 
@@ -277,19 +263,19 @@ plot_AUC_3 <- ggplot()+
 plot_AUC_3
 
 # Output figures
-png("../output/figures/xval_plot_AUC_0.png", width=10, height=5, units="in", res=300, type="cairo")
+png("../output/figures/xval_plot_AUC_0.png", width=12, height=6, units="in", res=300, type="cairo")
 print(plot_AUC_0)
 dev.off()
 
-png("../output/figures/xval_plot_AUC_1.png", width=10, height=5, units="in", res=300, type="cairo")
+png("../output/figures/xval_plot_AUC_1.png", width=12, height=6, units="in", res=300, type="cairo")
 print(plot_AUC_1)
 dev.off()
 
-png("../output/figures/xval_plot_AUC_2.png", width=10, height=5, units="in", res=300, type="cairo")
+png("../output/figures/xval_plot_AUC_2.png", width=12, height=6, units="in", res=300, type="cairo")
 print(plot_AUC_2)
 dev.off()
 
-png("../output/figures/xval_plot_AUC_3.png", width=10, height=5, units="in", res=300, type="cairo")
+png("../output/figures/xval_plot_AUC_3.png", width=12, height=6, units="in", res=300, type="cairo")
 print(plot_AUC_3)
 dev.off()
 
