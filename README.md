@@ -1,4 +1,5 @@
 # Overview
+* Written by David Iles on 10 August 2023*
 
 This analysis was presented at the 2023 American Ornithological Society conference, in a symposium title "Analysis challenges for breeding bird atlases".
 
