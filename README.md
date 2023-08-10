@@ -20,5 +20,16 @@ Cross-validation accuracy is measured using:
 # Workflow
 
 1) `1_select_xval_squares.R` divides the landscape into a spatially balanced, random selection of 50 km x 50 km blocks.  It then separates them into 5 cross-validation folds.
-2) 
+2) `2_Prep_Bird_Data.R` takes survey data (point counts and checklists) provided by Birds Canada (through NatureCounts) and cleans/formats it for analysis
+3) `3_prepare_AOS_data.R` sets the criteria for inclusion in analysis (dates of surveys, times of day, etc).  This could be merged with `2_Prep_Bird_Data.R` in future projects.
+4) `4_AOS_xval_PC_CL_subset.R` conducts the integrated analyses and saves cross-validation accuracy metrics
+5) `5_AOS_plots_subset.R` summarizes and plots results of cross-validation analysis.
+6) `6_AOS_surface_comparison_subset.R` creates a full prediction surface across SK from each model, using all available data.  This would be the "full analysis", but some pieces of code need to be updated.
+
+# Other notes
+
+- the "other_analyses" folder contains scripts that conduct the crossvalidation analyses using other data selection criteria.  These scripts are a work in progress.
+- the "actual" provincial breeding bird atlas analysis will be contained in a different github repository.
+
+
 
